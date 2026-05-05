@@ -1,8 +1,8 @@
-# Equatoria Idle — Architecture
+# Equatoria RPG — Architecture
 
 ## Overview
 
-Equatoria Idle is a mobile-first idle game built with TypeScript, rendered on a low-resolution canvas with DOM-based UI overlays. The game centres on upgrading a mathematical equation that generates coloured motes (resources).
+Equatoria RPG is a mobile-first math-, physics-, and particle-driven RPG built with TypeScript, rendered on a low-resolution canvas with DOM-based UI overlays. The core experience centers on kinetic combat, progression systems, and expressive particle simulation.
 
 ## Runtime Flow
 

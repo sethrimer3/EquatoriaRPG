@@ -1,4 +1,4 @@
-# Equatoria Idle — Technical Decisions
+# Equatoria RPG — Technical Decisions
 
 ## Internal Render Resolution
 
