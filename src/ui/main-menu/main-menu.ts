@@ -35,6 +35,22 @@
 import { createSoftWireRenderer } from '../../render/rpg/rpg-soft-wire';
 import type { SoftWireData } from '../../render/rpg/rpg-soft-wire';
 
+// ── Visual constants ──────────────────────────────────────────────────────────
+
+/** Wire source-plug colour (gold — matches the output-plug aesthetic). */
+const WIRE_SOURCE_COLOR           = '#ffd764';
+/** Wire colour when connected to the Start Game option. */
+const WIRE_START_TARGET_COLOR     = '#a0e080';
+/** Wire colour when connected to the Settings option. */
+const WIRE_SETTINGS_TARGET_COLOR  = '#a78bfa';
+
+/**
+ * Extra pixels added to viewport height when computing off-screen target
+ * translateY values, ensuring boxes are well outside the visible area during
+ * fly-in / fly-out transitions.
+ */
+const OFFSCREEN_BUFFER_PX = 300;
+
 // ── Layout constants ──────────────────────────────────────────────────────────
 
 /** CSS px distance from the left viewport edge to the title box. */
@@ -284,7 +300,7 @@ export function createMainMenu(onStartGame: () => void): MainMenuHandle {
     settingsPanel.style.width = Math.max(200, titleW + 80) + 'px';
 
     // Initially the settings panel is off screen above
-    settingsPanelOffsetY = -(overlay.clientHeight + 300);
+    settingsPanelOffsetY = -(overlay.clientHeight + OFFSCREEN_BUFFER_PX);
 
     layoutReady = true;
   }
@@ -313,8 +329,8 @@ export function createMainMenu(onStartGame: () => void): MainMenuHandle {
   // ── Wire management ───────────────────────────────────────────────────────
 
   function connectWire(target: 'start' | 'settings'): void {
-    const srcColor = '#ffd764';
-    const dstColor = target === 'start' ? '#a0e080' : '#a78bfa';
+    const srcColor = WIRE_SOURCE_COLOR;
+    const dstColor = target === 'start' ? WIRE_START_TARGET_COLOR : WIRE_SETTINGS_TARGET_COLOR;
     const wire = wireRenderer.createWire(srcColor, dstColor);
 
     wire.tipHandle.style.background  = dstColor;
@@ -520,8 +536,8 @@ export function createMainMenu(onStartGame: () => void): MainMenuHandle {
 
     // ── State-specific transforms ─────────────────────────────────────────
 
-    const offscreenDown = overlayH + 300;
-    const offscreenUp   = -(overlayH + 300);
+    const offscreenDown = overlayH + OFFSCREEN_BUFFER_PX;
+    const offscreenUp   = -(overlayH + OFFSCREEN_BUFFER_PX);
 
     if (menuState === 'idle' || menuState === 'dragging' || menuState === 'startSelected') {
       titleOffsetY         = floatTitle;
@@ -542,10 +558,15 @@ export function createMainMenu(onStartGame: () => void): MainMenuHandle {
       settingsPanelOffsetY = offscreenUp;
 
       if (t >= 1) {
-        // Fly-up complete — hand off to game
-        onStartGame();
-        overlay.style.display = 'none';
+        // Fly-up complete — self-clean up before handing off to game.
+        // Stop the animation loop, disconnect observer, clean up any wires.
         cancelAnimationFrame(rafId);
+        resizeObserver.disconnect();
+        if (connectedWire) wireRenderer.finalizeWireRemoval(connectedWire);
+        for (const w of slurpingWires) wireRenderer.finalizeWireRemoval(w);
+        overlay.style.display = 'none';
+        // Notify the caller that the menu is done (starts the game).
+        onStartGame();
         return;
       }
 
@@ -651,11 +672,15 @@ export function createMainMenu(onStartGame: () => void): MainMenuHandle {
 
   // ── Bootstrap ─────────────────────────────────────────────────────────────
 
-  // First RAF: do layout and start the loop
+  // First RAF: perform an initial layout pass, then begin the main loop.
+  // The second nested requestAnimationFrame ensures the CSS opacity transition
+  // (`.mm--visible`) starts *after* the browser has painted the initial layout,
+  // preventing a visible jump on the first render.
   rafId = requestAnimationFrame((nowMs) => {
     lastFrameMs = nowMs;
     doLayout();
-    // Fade in the overlay once layout is ready
+    // Queue the opacity fade-in only once layout is known, so the browser
+    // triggers the transition from opacity:0 → opacity:1 on the next paint.
     requestAnimationFrame(() => {
       overlay.classList.add('mm--visible');
     });

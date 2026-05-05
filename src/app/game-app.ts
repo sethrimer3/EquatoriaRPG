@@ -312,8 +312,9 @@ export async function startApp(): Promise<void> {
   // and the full game loop begins.
   const mainMenu = createMainMenu(() => {
     cancelAnimationFrame(bgAnimRafId);
-    // mainMenu.destroy() is already called internally by the component after
-    // the fly-up animation — we just need to activate the game.
+    // The main menu component self-cleans (ResizeObserver, wires, RAF) at the end
+    // of the start-game fly-up animation before calling this callback.
+    // All that remains is to reveal the RPG gameplay elements and start the game loop.
 
     // Reveal the RPG gameplay elements and start the game loop.
     rpgContainer.style.display = '';
