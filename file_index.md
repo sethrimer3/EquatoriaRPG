@@ -39,12 +39,24 @@
 - Styles for the idle/offline reward overlay (`.idle-overlay`, `.idle-overlay__card`, tier rows, animations).
 - Uses CSS variables from `base.css`; `backdrop-filter: blur(4px)` guarded by `@supports`.
 
+### src/styles/main-menu.css
+- Full visual vocabulary for the circuit-style main menu:
+  - `#main-menu-overlay` — full-screen `z-index: 90` overlay.
+  - `.mm-title-box` — floating source node with the output plug.
+  - `.mm-option-box` — thin rectangular option modules with input plugs.
+  - `.mm-input-plug`, `.mm-output-plug` — plug circles, hover/connected states.
+  - `.mm-settings-panel` — settings placeholder that slides in when Settings is selected.
+  - `mm-plug-pulse` — CSS keyframe glow animation for connected plug state.
+  - `.mm-wire-svg` — SVG overlay for the Verlet-rope wire (reuses `rpg-soft-wire.ts`).
+
 ### src/styles/responsive.css
 - `@media` queries for landscape and desktop wider layout.
 
 ### src/app/game-app.ts
 - Slim application bootstrap (DOM setup, panel wiring, pointer listeners, resize handler).
 - `startApp()` — creates systems and wires them via `app-actions` and `app-game-loop`.
+- Shows the main menu before the game loop starts; the game loop begins only when
+  the player selects "Start Game" via the wire interaction.
 - Delegates action handling to `app-actions.ts` and game loop to `app-game-loop.ts`.
 
 ### src/app/app-types.ts
@@ -789,6 +801,23 @@
 
 ### src/ui/loading/loading-screen.ts
 - Loading screen with company logo and fade-out transition.
+
+### src/ui/main-menu/main-menu.ts
+- Circuit-style main menu shown before gameplay starts.
+- `createMainMenu(onStartGame)` → `MainMenuHandle`.
+- DOM elements: `mm-title-box` (output plug), two `mm-option-box` (Start Game, Settings),
+  `mm-settings-panel` (placeholder settings, slides in from top).
+- Reuses `createSoftWireRenderer` (Verlet-rope physics) for the drag wire.
+- State machine: `idle | dragging | startSelected | startTransition | settingsOpen | settingsClosing`.
+- All boxes float sinusoidally (frame-rate independent via elapsed time).
+- Start Game → fly-up animation (easeIn) → calls `onStartGame()` callback.
+- Settings → Start option drops off screen, settings panel slides in; wire stays visibly
+  connected to the settings option box. Disconnect wire to return.
+- Layout driven by `MENU_MARGIN_X / MENU_MARGIN_Y` constants.
+- Magnetic snap within `SNAP_RADIUS_PX` to make plug targeting feel responsive.
+
+### src/ui/main-menu/index.ts
+- Re-export barrel for `createMainMenu` and `MainMenuHandle`.
 
 ### src/ui/tabs/tab-bar.ts
 - Bottom tab bar: Equation / Looms / Tiers / Achievements / Settings.

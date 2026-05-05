@@ -36,6 +36,7 @@ import { createAudioSystem } from '../audio';
 import { createRpgRender } from '../render/rpg/rpg-render';
 import { createRpgMenuPanel } from '../ui/panels/rpg-menu-panel';
 import { addMotes } from '../sim/resources/resource-state';
+import { createMainMenu } from '../ui/main-menu';
 
 import type { AppState, UIPanels } from './app-types';
 import { handleAction as handleActionImpl } from './app-actions';
@@ -103,9 +104,10 @@ export async function startApp(): Promise<void> {
 
   const cc = createGameCanvas(canvasContainer);
 
-  // ── RPG container (full screen, always visible) ──
+  // ── RPG container (full screen, hidden until main menu completes) ──
   const rpgContainer = document.createElement('div');
   rpgContainer.id = 'rpg-container';
+  rpgContainer.style.display = 'none';   // revealed by main menu onStartGame
   root.appendChild(rpgContainer);
 
   // ── Particle system ──
@@ -202,9 +204,8 @@ export async function startApp(): Promise<void> {
     rpgMenuPanel,
   };
 
-  // RPG is always active
-  rpgRender.setActive(true);
-  rpgRender.resize(rpgContainer);
+  // RPG is activated after the main menu transition completes (see below).
+  // Do NOT call rpgRender.setActive(true) / resize() here.
 
   // ── Action dispatch ──
   dispatch = (action: GameAction): void => {
@@ -276,7 +277,8 @@ export async function startApp(): Promise<void> {
   window.addEventListener('resize', onResize);
   bgAnimation.resize(canvasContainer.clientWidth, canvasContainer.clientHeight);
 
-  // ── Game loop ──
+  // ── Game loop (created here, started after the main menu completes) ──
+  const lastFrameMs = { value: performance.now() };
   const gameLoop = createGameLoop({
     appState,
     cc,
@@ -286,11 +288,41 @@ export async function startApp(): Promise<void> {
     bgAnimation,
     vermiculateEffect,
     substrateEffect,
-    lastFrameMs: { value: performance.now() },
+    lastFrameMs,
   });
 
-  // ── Fade out loading screen and start ──
+  // ── Fade out loading screen ──
   await loadingScreen.fadeOut();
 
-  requestAnimationFrame(gameLoop);
+  // ── Lightweight background-animation loop (runs while main menu is shown) ──
+  // Keeps the background canvas alive and animated so the menu has a living backdrop.
+  let bgAnimRafId = 0;
+  let bgAnimLastMs = performance.now();
+  function bgAnimLoop(nowMs: number): void {
+    const dt = Math.min(nowMs - bgAnimLastMs, 200);
+    bgAnimLastMs = nowMs;
+    bgAnimation.update(dt);
+    bgAnimRafId = requestAnimationFrame(bgAnimLoop);
+  }
+  bgAnimRafId = requestAnimationFrame(bgAnimLoop);
+
+  // ── Main menu ──
+  // Shown before gameplay. When the player connects the wire to "Start Game",
+  // onStartGame() is called, the menu flies off, the RPG elements are revealed,
+  // and the full game loop begins.
+  const mainMenu = createMainMenu(() => {
+    cancelAnimationFrame(bgAnimRafId);
+    // mainMenu.destroy() is already called internally by the component after
+    // the fly-up animation — we just need to activate the game.
+
+    // Reveal the RPG gameplay elements and start the game loop.
+    rpgContainer.style.display = '';
+    rpgRender.statsPanel.style.display = '';   // clear the inline 'none' — CSS 'flex' takes over
+    rpgRender.setActive(true);
+    rpgRender.resize(rpgContainer);
+
+    lastFrameMs.value = performance.now();
+    requestAnimationFrame(gameLoop);
+  });
+  root.appendChild(mainMenu.element);
 }

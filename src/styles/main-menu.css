@@ -1,0 +1,257 @@
+/* ═══════════════════════════════════════════════════════════════
+   Main Menu — Circuit-panel floating UI with plug-and-wire
+   option selection.
+
+   Layout:
+     - #main-menu-overlay — full-screen absolute overlay
+     - .mm-title-box    — source node (top-left), contains output plug
+     - .mm-option-box   — thin rectangular option modules (input plug)
+     - .mm-settings-panel — placeholder settings panel (slides in from top)
+     - .mm-wire-svg     — SVG overlay for the Verlet-rope wire
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Root overlay ──────────────────────────────────────────────── */
+#main-menu-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 90;          /* above game (z:2–6), below loading screen (z:100) */
+  pointer-events: none; /* re-enabled on interactive children */
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+#main-menu-overlay.mm--visible {
+  opacity: 1;
+}
+
+/* ── Wire SVG layer (Verlet-rope, full overlay) ─────────────────── */
+.mm-wire-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 3;
+}
+
+/* Override the rpg-equip-wire-svg filter to use the gold palette */
+.mm-wire-svg .rpg-wire-rope {
+  filter: drop-shadow(0 0 4px rgba(255, 215, 100, 0.55));
+}
+
+/* ── Shared floating box base ──────────────────────────────────── */
+.mm-box {
+  position: absolute;
+  background: rgba(8, 8, 20, 0.88);
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  border-radius: 8px;
+  pointer-events: auto;
+  will-change: transform;
+}
+
+/* ── Title / source box ────────────────────────────────────────── */
+.mm-title-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 10px 12px 8px;
+  min-width: 108px;
+  border-color: rgba(255, 241, 114, 0.28);
+}
+
+.mm-title-text {
+  font-family: var(--font-primary);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.mm-subtitle-text {
+  font-family: var(--font-primary);
+  font-size: 9px;
+  color: var(--text-secondary);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+
+/* Row containing the "select" label and output plug */
+.mm-output-plug-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.mm-plug-label {
+  font-size: 8px;
+  color: rgba(167, 139, 250, 0.6);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* ── Output plug — circular drag source ────────────────────────── */
+.mm-output-plug {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 215, 100, 0.55);
+  background: rgba(255, 215, 100, 0.1);
+  cursor: crosshair;
+  pointer-events: auto;
+  touch-action: none;
+  flex-shrink: 0;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.mm-output-plug:hover,
+.mm-output-plug--active {
+  box-shadow: 0 0 10px rgba(255, 215, 100, 0.65);
+  border-color: rgba(255, 215, 100, 0.95);
+}
+
+/* ── Option boxes ──────────────────────────────────────────────── */
+.mm-option-box {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  min-width: 120px;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+/* Hover: wire is dragged close to this option's input plug */
+.mm-option-box--hover {
+  border-color: rgba(255, 215, 100, 0.65);
+  box-shadow: 0 0 10px rgba(255, 215, 100, 0.2);
+  background: rgba(255, 215, 100, 0.04);
+}
+
+/* Connected: wire is plugged into this option */
+.mm-option-box--connected {
+  border-color: rgba(255, 215, 100, 0.9);
+  box-shadow: 0 0 14px rgba(255, 215, 100, 0.3);
+  background: rgba(255, 215, 100, 0.08);
+}
+
+/* ── Input plug — circle on the left side of each option box ───── */
+.mm-input-plug {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(167, 139, 250, 0.4);
+  background: rgba(167, 139, 250, 0.08);
+  flex-shrink: 0;
+  transition: box-shadow 0.12s, border-color 0.12s, background 0.12s;
+  pointer-events: none;
+}
+
+/* Wire tip is near this plug */
+.mm-input-plug--hover {
+  border-color: rgba(255, 215, 100, 0.85);
+  box-shadow:
+    0 0 8px rgba(255, 215, 100, 0.5),
+    0 0 18px rgba(255, 215, 100, 0.25);
+}
+
+/* Wire is plugged in */
+.mm-input-plug--connected {
+  border-color: rgba(255, 215, 100, 1);
+  background: rgba(255, 215, 100, 0.22);
+  box-shadow: 0 0 12px rgba(255, 215, 100, 0.7);
+  animation: mm-plug-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes mm-plug-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 215, 100, 0.5); }
+  50%       { box-shadow: 0 0 18px rgba(255, 215, 100, 0.85), 0 0 30px rgba(255, 215, 100, 0.3); }
+}
+
+/* ── Option label text ─────────────────────────────────────────── */
+.mm-option-label {
+  font-family: var(--font-primary);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ── Settings panel ────────────────────────────────────────────── */
+.mm-settings-panel {
+  position: absolute;
+  background: rgba(8, 8, 20, 0.92);
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  border-radius: 10px;
+  padding: 12px 14px;
+  pointer-events: none;  /* enabled when fully open */
+  will-change: transform;
+  min-width: 180px;
+}
+
+/* Title row inside the settings panel */
+.mm-settings-title {
+  font-family: var(--font-primary);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 241, 114, 0.12);
+}
+
+/* Individual settings rows (placeholders) */
+.mm-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-family: var(--font-primary);
+  font-size: 10px;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+}
+
+.mm-settings-row:last-of-type {
+  border-bottom: none;
+}
+
+.mm-settings-row-hint {
+  font-size: 9px;
+  opacity: 0.4;
+}
+
+/* Disconnect-wire-to-return hint at the bottom of the settings panel */
+.mm-settings-hint {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(167, 139, 250, 0.1);
+  font-size: 8px;
+  color: rgba(167, 139, 250, 0.45);
+  letter-spacing: 0.5px;
+  font-style: italic;
+  text-align: center;
+}
+
+/* ── Dev box number overlays (for layout debugging, hidden by default) ── */
+.mm-dev-label {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  font-size: 7px;
+  color: rgba(255, 241, 114, 0.3);
+  font-family: monospace;
+  pointer-events: none;
+}
