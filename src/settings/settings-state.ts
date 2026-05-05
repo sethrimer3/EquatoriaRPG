@@ -13,8 +13,6 @@ export interface SettingsState {
   numberFormat: 'letters' | 'scientific' | 'engineering';
   /** RPG enemy marker style. */
   rpgEnemyIndicatorStyle: 'triangle' | 'outline' | 'off';
-  /** Visibility mode for generator/loom equations in the HUD overlay. */
-  generatorEquationVisibility: 'always' | 'proximity' | 'off';
   /** When true: all upgrades/unlocks are available regardless of cost; costs are not deducted. */
   isDevMode: boolean;
   /** When true, the RPG stats bar is anchored to the top of the screen instead of the bottom. */
@@ -33,7 +31,6 @@ export function createDefaultSettings(): SettingsState {
     backgroundStyle: 'vermiculate',
     numberFormat: 'letters',
     rpgEnemyIndicatorStyle: 'triangle',
-    generatorEquationVisibility: 'proximity',
     isDevMode: false,
     rpgBarAtTop: false,
   };

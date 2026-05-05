@@ -1,13 +1,7 @@
 /** Actions that can be dispatched from input. */
 export type GameAction =
   | { kind: 'tap'; xScreen: number; yScreen: number }
-  | { kind: 'purchase_upgrade'; upgradeId: string }
-  | { kind: 'unlock_next_tier' }
-  | { kind: 'unlock_equation_forge' }
-  | { kind: 'upgrade_loom'; tierId: string }
-  | { kind: 'upgrade_special_loom'; tierId: string }
   | { kind: 'aliven_mote'; tierId: string }
-  | { kind: 'claim_achievement'; achievementId: string }
   | { kind: 'set_active_tab'; tabId: TabId }
   | { kind: 'save_game' }
   | { kind: 'reset_game' }
@@ -25,7 +19,7 @@ export type GameAction =
   | { kind: 'start_boss_fight'; bossId: number }
   | { kind: 'set_boss_speed'; pct: number };
 
-export type TabId = 'equation' | 'resources' | 'rpg' | 'achievements' | 'settings';
+export type TabId = 'rpg';
 
 export type ActionHandler = (action: GameAction) => void;
 
@@ -35,7 +29,7 @@ export const DOUBLE_TAP_MAX_MS = 350;
 export const DOUBLE_TAP_MAX_PX = 40;
 
 /**
- * Sets up touch and mouse event listeners on the game canvas area.
+ * Sets up touch and mouse event listeners on the game container.
  * Translates raw input into GameActions.
  */
 export function setupInputListeners(
@@ -49,7 +43,6 @@ export function setupInputListeners(
 
   tapTarget.addEventListener('pointerdown', onPointerDown, { passive: false });
 
-  // Cleanup
   return () => {
     tapTarget.removeEventListener('pointerdown', onPointerDown);
   };

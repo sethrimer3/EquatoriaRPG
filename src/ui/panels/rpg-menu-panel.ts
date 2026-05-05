@@ -1,15 +1,14 @@
 /**
  * rpg-menu-panel.ts — Tabbed RPG menu panel (outer shell).
  *
- * Displayed as an overlay over the RPG container when the player taps the
- * Menu button.  Contains three tabs; each tab's content is owned by a
- * dedicated sub-pane module:
+ * Displayed as an overlay when the player taps the Menu button.
+ * Contains tabs:
  *   1. Menu     — rpg-menu-tab.ts     (Auto Move toggle + respawn checkpoint)
  *   2. Weapons  — rpg-weapons-tab.ts  (weapon purchase / equip / tier-upgrade)
  *   3. Upgrades — rpg-upgrades-tab.ts (RPG-specific upgrade purchases)
- *
- * This file is responsible only for the outer shell, header, tab bar,
- * content area, and routing updates to the active sub-pane.
+ *   4. Bosses   — rpg-bosses-tab.ts
+ *   5. Enemies  — rpg-enemies-tab.ts
+ *   6. Settings — settings panel (replaces the old bottom-tab settings screen)
  */
 
 import type { RpgSimState } from '../../sim/rpg/rpg-state';
@@ -27,12 +26,10 @@ import { makePageBreak } from '../ui-helpers';
 
 // ─── Types ────────────────────────────────────────────────────────
 
-// ─── Types ────────────────────────────────────────────────────────
-
-type RpgMenuTab = 'menu' | 'weapons' | 'upgrades' | 'bosses' | 'enemies';
+type RpgMenuTab = 'menu' | 'weapons' | 'upgrades' | 'bosses' | 'enemies' | 'settings';
 
 export interface RpgMenuPanel {
-  /** Root element — append to #app root, above the tab bar. */
+  /** Root element — append to #app root. */
   element: HTMLElement;
   /** Re-render the active sub-tab with fresh state. */
   update(
@@ -55,6 +52,8 @@ export interface RpgMenuPanel {
 export function createRpgMenuPanel(
   dispatch: ActionHandler,
   onRpgBarAtTopChange: (atTop: boolean) => void = () => undefined,
+  /** Pre-built settings panel element to mount under the Settings tab. */
+  settingsEl?: HTMLElement,
 ): RpgMenuPanel {
   const element = document.createElement('div');
   element.id = 'rpg-menu-panel';
@@ -90,6 +89,7 @@ export function createRpgMenuPanel(
     { id: 'upgrades', label: 'Upgrades' },
     { id: 'bosses',   label: 'Bosses' },
     { id: 'enemies',  label: 'Enemies' },
+    { id: 'settings', label: '⚙ Settings' },
   ];
 
   const tabBtns: Map<RpgMenuTab, HTMLButtonElement> = new Map();
@@ -121,6 +121,11 @@ export function createRpgMenuPanel(
   const bossesTabPane: RpgBossesTabPane = createRpgBossesTabPane(dispatch);
   const enemiesTabPane: RpgEnemiesTabPane = createRpgEnemiesTabPane(dispatch);
 
+  // Settings pane wrapper
+  const settingsPaneEl = document.createElement('div');
+  settingsPaneEl.className = 'rpg-menu__settings-pane';
+  if (settingsEl) settingsPaneEl.appendChild(settingsEl);
+
   // All pane elements live in the content area; we show/hide per active tab.
   const content = document.createElement('div');
   content.className = 'rpg-menu__content';
@@ -130,6 +135,7 @@ export function createRpgMenuPanel(
   content.appendChild(upgradesTabPane.element);
   content.appendChild(bossesTabPane.element);
   content.appendChild(enemiesTabPane.element);
+  content.appendChild(settingsPaneEl);
   element.appendChild(content);
 
   // ── Internal state ────────────────────────────────────────────
@@ -154,11 +160,12 @@ export function createRpgMenuPanel(
     upgradesTabPane.element.style.display = activeTab === 'upgrades' ? '' : 'none';
     bossesTabPane.element.style.display   = activeTab === 'bosses'   ? '' : 'none';
     enemiesTabPane.element.style.display  = activeTab === 'enemies'  ? '' : 'none';
+    settingsPaneEl.style.display          = activeTab === 'settings' ? '' : 'none';
   }
 
   function renderActiveTab(): void {
-    if (!lastRpgState || !lastResources) return;
     showActivePane();
+    if (!lastRpgState || !lastResources) return;
     switch (activeTab) {
       case 'menu':
         menuTabPane.update(lastRpgState, lastIsDevMode, lastRpgBarAtTop);
@@ -174,6 +181,9 @@ export function createRpgMenuPanel(
         break;
       case 'enemies':
         enemiesTabPane.update(lastRpgState, lastIsDevMode);
+        break;
+      case 'settings':
+        // Settings panel is self-contained; no update needed.
         break;
     }
   }

@@ -3,26 +3,18 @@
  */
 
 import type { GameState } from '../sim';
-import type { TabId } from '../input';
 import type { ForgeCrunchState } from '../sim/forge';
 import type { GeneratorState } from '../sim/particles';
 import type { ParticleDragState } from '../input/particle-drag';
-import type { TabBar } from '../ui/tabs';
-import type { UpgradePanel } from '../ui/panels/upgrade-panel';
-import type { ResourcePanel } from '../ui/panels/resource-panel';
-import type { SettingsPanel } from '../ui/panels/settings-panel';
-import type { LoomPanel } from '../ui/panels/loom-panel';
-import type { EquationPanel } from '../ui/panels/equation-panel';
-import type { AchievementsPanel } from '../ui/panels/achievements-panel';
 import type { RpgRender } from '../render/rpg/rpg-render';
 import type { RpgMenuPanel } from '../ui/panels/rpg-menu-panel';
 
 /** Mutable application-level state. */
 export interface AppState {
   game: GameState;
-  activeTab: TabId;
   tapFlashAlpha: number;
   animPulse: number;
+  /** Retained for particle-system API compatibility. */
   forge: ForgeCrunchState;
   generatorState: GeneratorState;
   particleDrag: ParticleDragState;
@@ -31,22 +23,14 @@ export interface AppState {
   lastTapTimeMs: number;
 }
 
-/** Configuration object grouping all UI panels for tab switching. */
+/** Configuration object grouping all UI panels. */
 export interface UIPanels {
-  tabBar: TabBar;
-  upgradePanel: UpgradePanel;
-  resourcePanel: ResourcePanel;
-  settingsPanel: SettingsPanel;
-  loomPanel: LoomPanel;
-  equationPanel: EquationPanel;
-  achievementsPanel: AchievementsPanel;
-  panelsContainer: HTMLElement;
-  /** The main game canvas container — hidden while the RPG tab is active. */
+  /** The hidden background canvas container (particles run here). */
   mainCanvasContainer: HTMLElement;
-  /** The RPG render system and its canvas container. */
+  /** The RPG render system. */
   rpgRender: RpgRender;
-  /** Container that wraps the RPG canvas — shown only on the RPG tab. */
+  /** Container that wraps the RPG canvas — always visible. */
   rpgContainer: HTMLElement;
-  /** Tabbed RPG menu (Menu / Weapons / Upgrades). */
+  /** Tabbed RPG menu (Menu / Weapons / Upgrades / Settings). */
   rpgMenuPanel: RpgMenuPanel;
 }

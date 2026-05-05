@@ -141,22 +141,6 @@ export function createSettingsPanel(
   );
   panel.appendChild(enemyIndicatorRow);
 
-  const generatorEquationVisibilityRow = createSelectRow(
-    'Loom Equation Visibility',
-    settings.generatorEquationVisibility,
-    [
-      { value: 'always',    label: 'Always On' },
-      { value: 'proximity', label: 'Proximity' },
-      { value: 'off',       label: 'Always Off' },
-    ],
-    (v) => {
-      settings.generatorEquationVisibility = v as SettingsState['generatorEquationVisibility'];
-      saveSettings(settings);
-      audioSystem?.onSettingsChanged();
-    },
-  );
-  panel.appendChild(generatorEquationVisibilityRow);
-
   // Screen shake toggle
   const shakeRow = createToggleRow('Screen Shake', settings.isScreenShakeEnabled, (v) => {
     settings.isScreenShakeEnabled = v;
@@ -214,8 +198,8 @@ export function createSettingsPanel(
   const credits = document.createElement('div');
   credits.className = 'credits';
   credits.innerHTML = `
-    <p>Equatoria Idle v0.1.0</p>
-    <p>A mathematical idle adventure</p>
+    <p>Equatoria RPG v0.1.0</p>
+    <p>A math-themed particle-physics RPG</p>
   `;
   panel.appendChild(credits);
 
