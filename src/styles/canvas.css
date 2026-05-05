@@ -579,7 +579,8 @@
 }
 
 /* ── Wire rope SVG overlay (used by soft-body wire renderer) ───── */
-  filter: drop-shadow(0 0 3px rgba(167, 139, 250, 0.6));
+.rpg-wire-rope {
+   filter: drop-shadow(0 0 3px rgba(167, 139, 250, 0.6));
 }
 
 /* ── Weapon source plugs (box 1) ────────────────────────────────── */
