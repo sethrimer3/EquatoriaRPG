@@ -1,125 +1,44 @@
 /**
- * app-actions.ts — Action dispatch, tab switching, and UI update logic.
- *
- * Extracted from game-app.ts to keep the orchestrator lean.
+ * app-actions.ts — Action dispatch and UI update logic.
  */
 
-import {
-  tapEquation,
-  tryPurchaseUpgrade,
-  tryUnlockNextTier,
-  tryUnlockEquationForge,
-  tryUpgradeLoom,
-  tryPurchaseSpecialLoom,
-  tryAlivenMote,
-  claimAchievement,
-} from '../sim';
+import { tryAlivenMote } from '../sim';
 import { setInteractionMatrixCell, resetInteractionMatrix } from '../sim/aliven';
 import { getMotes, spendMotes } from '../sim/resources';
 import { WEAPON_BY_ID } from '../data/rpg/weapon-definitions';
 import { RPG_UPGRADE_BY_ID } from '../data/rpg/rpg-upgrade-definitions';
-import { getRpgUpgradeLevel, getWeaponTierUpgradeCost, getMaxEquippedWeapons, MAX_WEAPON_TIER, isBossUnlocked, MIN_BOSS_SPEED_PCT, MAX_BOSS_SPEED_PCT, BOSS_SPEED_STEP } from '../sim/rpg/rpg-state';
+import {
+  getRpgUpgradeLevel,
+  getWeaponTierUpgradeCost,
+  getMaxEquippedWeapons,
+  MAX_WEAPON_TIER,
+  isBossUnlocked,
+  MIN_BOSS_SPEED_PCT,
+  MAX_BOSS_SPEED_PCT,
+  BOSS_SPEED_STEP,
+} from '../sim/rpg/rpg-state';
 import type { TierId } from '../data/tiers';
 import type { GameAction } from '../input';
-import { DOUBLE_TAP_MAX_MS, DOUBLE_TAP_MAX_PX } from '../input';
-import type { CanvasContext } from '../render/canvas';
 import type { ParticleSystem } from '../render';
 import type { SettingsState } from '../settings';
 import type { AppState, UIPanels } from './app-types';
-import type { NumberFormat } from '../util';
 import type { AudioSystem } from '../audio';
-import { GENERATOR_HIT_RADIUS_PX, MAX_FORGE_ATTRACTION_DISTANCE } from '../data/particles/particle-config';
 
 // ─── Action handler ─────────────────────────────────────────────
 
 export function handleAction(
   state: AppState,
   action: GameAction,
-  cc: CanvasContext,
   particles: ParticleSystem,
   settings: SettingsState,
   uiPanels: UIPanels,
-  recomputeGenerators: () => void,
   audioSystem?: AudioSystem,
 ): void {
   const devMode = settings.isDevMode;
   switch (action.kind) {
-    case 'tap': {
-      if (!state.game.equation.isForgeUnlocked) break;
-
-      const rect = cc.canvas.getBoundingClientRect();
-      const scaleX = cc.widthPx / rect.width;
-      const scaleY = cc.heightPx / rect.height;
-      const canvasX = (action.xScreen - rect.left) * scaleX;
-      const canvasY = (action.yScreen - rect.top) * scaleY;
-
-      const nowMs = performance.now();
-
-      // Double-tap generator gather — works at any position, no forge-radius restriction.
-      const timeSinceLast = nowMs - state.lastTapTimeMs;
-      if (timeSinceLast < DOUBLE_TAP_MAX_MS) {
-        const dx = canvasX - state.lastTapCanvasX;
-        const dy = canvasY - state.lastTapCanvasY;
-        const distSq = dx * dx + dy * dy;
-        if (distSq < DOUBLE_TAP_MAX_PX * DOUBLE_TAP_MAX_PX) {
-          for (const gen of state.generatorState.generators) {
-            const gdx = canvasX - gen.x;
-            const gdy = canvasY - gen.y;
-            if (gdx * gdx + gdy * gdy < GENERATOR_HIT_RADIUS_PX * GENERATOR_HIT_RADIUS_PX) {
-              particles.gatherMotesToGenerator(gen.tierId, gen.x, gen.y);
-              // Reset so a third tap within the window doesn't trigger again
-              state.lastTapTimeMs = 0;
-              break;
-            }
-          }
-        }
-      }
-      state.lastTapCanvasX = canvasX;
-      state.lastTapCanvasY = canvasY;
-      state.lastTapTimeMs = nowMs;
-
-      // Equation tap only registers within the forge's radius of influence.
-      const forgeCenterX = cc.widthPx / 2;
-      const forgeCenterY = cc.heightPx / 2;
-      const tapDx = canvasX - forgeCenterX;
-      const tapDy = canvasY - forgeCenterY;
-      const forgeInfluenceRadiusSq = MAX_FORGE_ATTRACTION_DISTANCE * MAX_FORGE_ATTRACTION_DISTANCE;
-      if (tapDx * tapDx + tapDy * tapDy > forgeInfluenceRadiusSq) break;
-
-      tapEquation(state.game);
-      state.tapFlashAlpha = 1;
+    case 'tap':
+      // Taps are routed to the RPG render directly via its own pointer listeners.
       break;
-    }
-    case 'purchase_upgrade': {
-      const ok = tryPurchaseUpgrade(state.game, action.upgradeId, devMode);
-      if (ok) audioSystem?.onBuyEquationUpgrade();
-      else     audioSystem?.onError();
-      break;
-    }
-    case 'unlock_next_tier': {
-      const ok = tryUnlockNextTier(state.game, devMode);
-      if (ok) { recomputeGenerators(); audioSystem?.onBuyEquationUpgrade(); }
-      else      audioSystem?.onError();
-      break;
-    }
-    case 'unlock_equation_forge': {
-      const ok = tryUnlockEquationForge(state.game, devMode);
-      if (ok) audioSystem?.onBuyEquationUpgrade();
-      else     audioSystem?.onError();
-      break;
-    }
-    case 'upgrade_loom': {
-      const ok = tryUpgradeLoom(state.game, action.tierId as TierId, devMode);
-      if (ok) audioSystem?.onBuyLoomUpgrade();
-      else     audioSystem?.onError();
-      break;
-    }
-    case 'upgrade_special_loom': {
-      const ok = tryPurchaseSpecialLoom(state.game, action.tierId as TierId, devMode);
-      if (ok) audioSystem?.onBuyLoomUpgrade();
-      else     audioSystem?.onError();
-      break;
-    }
     case 'aliven_mote': {
       const ok = tryAlivenMote(state.game, action.tierId as TierId, devMode);
       if (!ok) audioSystem?.onError();
@@ -127,15 +46,11 @@ export function handleAction(
     }
     case 'set_interaction_matrix_cell':
       setInteractionMatrixCell(state.game.aliven, action.row, action.col, action.value);
-      // Sync immediately so the particle system picks up the change on the next frame
       particles.interactionMatrix = state.game.aliven.interactionMatrix;
       break;
     case 'reset_interaction_matrix':
       resetInteractionMatrix(state.game.aliven);
       particles.interactionMatrix = state.game.aliven.interactionMatrix;
-      break;
-    case 'claim_achievement':
-      claimAchievement(state.game.achievements, action.achievementId);
       break;
     case 'purchase_weapon': {
       const weaponDef = WEAPON_BY_ID.get(action.weaponId);
@@ -156,7 +71,6 @@ export function handleAction(
       if (!state.game.rpg.purchasedWeaponIds.has(action.weaponId)) { audioSystem?.onError(); break; }
       const maxSlots = getMaxEquippedWeapons(state.game.rpg);
       if (state.game.rpg.equippedWeaponIds.size >= maxSlots) { audioSystem?.onError(); break; }
-      // Find the first empty slot
       let firstEmpty = -1;
       for (let s = 0; s < maxSlots; s++) {
         if (!state.game.rpg.equippedWeaponSlots.has(s)) { firstEmpty = s; break; }
@@ -172,13 +86,11 @@ export function handleAction(
       if (!state.game.rpg.purchasedWeaponIds.has(action.weaponId)) { audioSystem?.onError(); break; }
       const maxSlots = getMaxEquippedWeapons(state.game.rpg);
       if (action.slotIndex < 0 || action.slotIndex >= maxSlots) { audioSystem?.onError(); break; }
-      // Remove any weapon already in this slot
       const prevWeapon = state.game.rpg.equippedWeaponSlots.get(action.slotIndex);
       if (prevWeapon) {
         state.game.rpg.equippedWeaponIds.delete(prevWeapon);
         state.game.rpg.equippedWeaponSlots.delete(action.slotIndex);
       }
-      // Remove the new weapon from any other slot it might currently occupy
       for (const [slot, wid] of state.game.rpg.equippedWeaponSlots) {
         if (wid === action.weaponId) {
           state.game.rpg.equippedWeaponSlots.delete(slot);
@@ -233,7 +145,6 @@ export function handleAction(
       }
       state.game.rpg.rpgUpgradeLevels.set(action.upgradeId, currentLevel + 1);
       audioSystem?.onBuyLoomUpgrade();
-      // Notify the render so speed multiplier updates immediately.
       uiPanels.rpgRender.notifyEquip();
       uiPanels.rpgMenuPanel.update(state.game.rpg, state.game.resources, settings.numberFormat, devMode);
       break;
@@ -254,11 +165,10 @@ export function handleAction(
       uiPanels.rpgMenuPanel.update(state.game.rpg, state.game.resources, settings.numberFormat, devMode);
       break;
     }
-    case 'respawn_now': {
+    case 'respawn_now':
       uiPanels.rpgRender.respawnNow();
       uiPanels.rpgMenuPanel.setVisible(false);
       break;
-    }
     case 'start_boss_fight': {
       const { bossId } = action;
       if (bossId < 1 || bossId > 10) { audioSystem?.onError(); break; }
@@ -279,85 +189,11 @@ export function handleAction(
       break;
     }
     case 'set_active_tab':
-      state.activeTab = action.tabId;
-      audioSystem?.onTabChange(action.tabId);
-      setActiveTab(state, uiPanels, state.game, settings.isDevMode, settings.numberFormat);
+      // Only 'rpg' tab exists; no-op.
       break;
     case 'save_game':
+    case 'reset_game':
       // Handled directly in game-app.ts before this function is reached.
       break;
-    // Note: 'reset_game' is also intercepted in game-app.ts (calls deleteSave +
-    // particles.reset) and never reaches this handler. No case needed here.
-  }
-}
-
-// ─── Tab switching ──────────────────────────────────────────────
-
-export function setActiveTab(
-  state: AppState,
-  panels: UIPanels,
-  game: import('../sim').GameState,
-  isDevMode: boolean,
-  numberFormat: NumberFormat,
-): void {
-  panels.tabBar.setActiveTab(state.activeTab);
-  panels.tabBar.updateAchievementIndicator(game);
-
-  const isRpg = state.activeTab === 'rpg';
-  const isEquation = state.activeTab === 'equation';
-
-  // RPG tab hides the main canvas and shows its own canvas container.
-  // Equation tab shows the main canvas only (no panel overlay).
-  // All other tabs show the panel overlay on top of the main canvas.
-  panels.mainCanvasContainer.style.display = isRpg ? 'none' : '';
-  panels.rpgContainer.style.display = isRpg ? '' : 'none';
-  panels.rpgRender.statsPanel.style.display = isRpg ? '' : 'none';
-  panels.rpgRender.setActive(isRpg);
-  // Hide RPG menu when leaving RPG tab.
-  if (!isRpg) panels.rpgMenuPanel.setVisible(false);
-  // Resize now that the container is visible so the canvas fills correctly.
-  if (isRpg) {
-    panels.rpgRender.resize(panels.rpgContainer);
-  }
-
-  // Slide the panel overlay in for non-equation, non-RPG tabs.
-  const shouldShowPanels = !isEquation && !isRpg;
-  panels.panelsContainer.classList.toggle('panels-visible', shouldShowPanels);
-
-  // Show/hide individual panels
-  panels.loomPanel.element.style.display = state.activeTab === 'resources' ? '' : 'none';
-  panels.achievementsPanel.element.style.display = state.activeTab === 'achievements' ? '' : 'none';
-  panels.achievementsPanel.setVisible(state.activeTab === 'achievements');
-  panels.settingsPanel.element.style.display = state.activeTab === 'settings' ? '' : 'none';
-
-  // Immediately update visible panel
-  updateVisiblePanels(state, panels, game, isDevMode, numberFormat);
-}
-
-// ─── UI update ──────────────────────────────────────────────────
-
-export function updateVisiblePanels(
-  state: AppState,
-  panels: UIPanels,
-  game: import('../sim').GameState,
-  isDevMode: boolean,
-  numberFormat: NumberFormat,
-): void {
-  panels.tabBar.updateAchievementIndicator(game);
-
-  if (state.activeTab === 'resources') {
-    // The combined Upgrades tab (loomPanel) handles all three sub-tabs:
-    // Equation, Loom, Aliven. Update the underlying panels so they stay
-    // current regardless of which sub-tab is showing.
-    panels.loomPanel.update(game, numberFormat);
-    panels.equationPanel.update(game, isDevMode, numberFormat);
-    panels.upgradePanel.update(game, isDevMode, numberFormat);
-    panels.resourcePanel.update(game, numberFormat);
-  } else if (state.activeTab === 'achievements') {
-    panels.achievementsPanel.update(game, numberFormat);
-  } else if (state.activeTab === 'rpg') {
-    // RPG menu is only re-rendered when visible; calling update here
-    // pre-populates its state so it shows current data immediately when opened.
-    panels.rpgMenuPanel.update(game.rpg, game.resources, numberFormat, isDevMode);
   }
 }

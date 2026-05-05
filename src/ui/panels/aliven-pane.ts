@@ -22,7 +22,6 @@ import {
   MATRIX_EDIT_STEP,
 } from '../../sim/aliven';
 import { formatNumberAs } from '../../util';
-import type { TraceEffect } from '../../render/ui/trace-effect';
 import { makePageBreak } from '../ui-helpers';
 
 // ─── Constants ───────────────────────────────────────────────────
@@ -60,7 +59,7 @@ function updateCellDisplay(cell: HTMLElement, val: number): void {
 
 // ─── Factory ─────────────────────────────────────────────────────
 
-export function createAlivenPane(dispatch: ActionHandler, traceEffect?: TraceEffect): AlivenPane {
+export function createAlivenPane(dispatch: ActionHandler): AlivenPane {
   const pane = document.createElement('div');
   pane.className = 'looms-sub-pane';
 
@@ -289,7 +288,6 @@ export function createAlivenPane(dispatch: ActionHandler, traceEffect?: TraceEff
           dragLastStepCount = 0;
           dragHasDragged = false;
           cell.setPointerCapture(e.pointerId);
-          if (traceEffect) traceEffect.setMatrixTarget(cell);
         });
 
         cell.addEventListener('pointermove', (e) => {
@@ -300,7 +298,6 @@ export function createAlivenPane(dispatch: ActionHandler, traceEffect?: TraceEff
         cell.addEventListener('pointerup', (e) => {
           if (dragRow !== srcIdx || dragCol !== tgtIdx) return;
           onCellDragEnd(e, srcIdx, tgtIdx);
-          if (traceEffect) traceEffect.setMatrixTarget(null);
         });
 
         cell.addEventListener('pointercancel', (_e) => {
@@ -309,7 +306,6 @@ export function createAlivenPane(dispatch: ActionHandler, traceEffect?: TraceEff
           dragCol = -1;
           dragHasDragged = false;
           dragLastStepCount = 0;
-          if (traceEffect) traceEffect.setMatrixTarget(null);
         });
 
         cellElements.set(`${srcIdx},${tgtIdx}`, cell);
@@ -374,17 +370,13 @@ export function createAlivenPane(dispatch: ActionHandler, traceEffect?: TraceEff
     // Keep a live reference so pointer event handlers always see the latest values.
     latestMatrix = state.aliven.interactionMatrix;
 
-    const unlockedCount = state.progression.unlockedTierCount;
-
     for (const tier of TIERS) {
       if (!isTierAliveneable(tier.id)) continue;
       const row = alivenRows.get(tier.id);
       const btn = alivenButtons.get(tier.id);
       if (!row || !btn) continue;
 
-      const tierUnlocked = tier.unlockOrder < unlockedCount;
-      row.style.display = tierUnlocked ? '' : 'none';
-      if (!tierUnlocked) continue;
+      row.style.display = '';
 
       const alive = isAlivened(state.aliven, tier.id);
       const affordable = canAffordAliven(state.resources, tier.id);
