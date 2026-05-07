@@ -81,16 +81,16 @@ export function drawMathObjective(
 
   // For equationSnake mode show the full equation text (e.g. "x = 15") in gold;
   // for symbolCore mode show the compact symbol + value (e.g. "= 15") in pale blue.
-  const useEquationText = obj.displayMode === 'equationSnake' && !!obj.equationText;
-  const label = useEquationText ? obj.equationText! : `${obj.displaySymbol} ${obj.compactValueText}`;
-  ctx.font = useEquationText ? EQUATION_SNAKE_FONT : LABEL_FONT;
+  const equationText = obj.displayMode === 'equationSnake' ? obj.equationText : undefined;
+  const label = equationText ?? `${obj.displaySymbol} ${obj.compactValueText}`;
+  ctx.font = equationText ? EQUATION_SNAKE_FONT : LABEL_FONT;
 
   const bgW = getCachedTextWidth(ctx, label) + 3;
-  ctx.fillStyle = useEquationText ? 'rgba(0,0,0,0.70)' : 'rgba(0,0,0,0.55)';
+  ctx.fillStyle = equationText ? 'rgba(0,0,0,0.70)' : 'rgba(0,0,0,0.55)';
   ctx.fillRect(ex - bgW / 2, ringCy - 3.5, bgW, 7);
 
   // Gold for equation-snake (makes Diamond enemies stand out); pale blue for standard.
-  ctx.fillStyle = useEquationText ? '#ffd764' : '#eef';
+  ctx.fillStyle = equationText ? '#ffd764' : '#eef';
   ctx.fillText(label, ex, ringCy);
 
   // ── Feedback flash ─────────────────────────────────────────
