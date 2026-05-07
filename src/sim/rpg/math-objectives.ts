@@ -226,6 +226,13 @@ export function makeGeometryAreaObjective(
   };
 }
 
+// ── Internal helpers ──────────────────────────────────────────────
+
+/** Sum all accepted hit values recorded on an objective. */
+function sumAcceptedHits(obj: MathObjective): number {
+  return obj.acceptedHitValues.reduce((acc, v) => acc + v, 0);
+}
+
 // ── Core evaluation ────────────────────────────────────────────────
 
 export interface EvalHitResult {
@@ -253,7 +260,7 @@ export function evaluateHit(obj: MathObjective, mathDmg: number): EvalHitResult 
   switch (ok.kind) {
     case 'threshold': {
       if (mathDmg >= ok.target) {
-        return { accepted: true, feedbackText: `✓ ${mathDmg}`, progressUpdated: true, nowSolved: true };
+        return { accepted: true, feedbackText: `✓ ${formatMathCompact(mathDmg)}`, progressUpdated: true, nowSolved: true };
       }
       return { accepted: false, feedbackText: `needs ≥${formatMathCompact(ok.target)}`, progressUpdated: false, nowSolved: false };
     }
@@ -298,8 +305,7 @@ export function evaluateHit(obj: MathObjective, mathDmg: number): EvalHitResult 
       };
     }
     case 'sumTarget': {
-      const currentSum = obj.acceptedHitValues.reduce((a, b) => a + b, 0);
-      const newSum = currentSum + mathDmg;
+      const newSum = sumAcceptedHits(obj) + mathDmg;
       const nowSolved = newSum >= ok.target;
       return {
         accepted: true,
@@ -370,13 +376,11 @@ export function evaluateHit(obj: MathObjective, mathDmg: number): EvalHitResult 
       break;
     }
     case 'factor': {
-      if (mathDmg === 0) {
-        return { accepted: false, feedbackText: 'divide by zero', progressUpdated: false, nowSolved: false };
-      }
+      // mathDmg > 0 is already guaranteed by the guard above
       if (ok.target % mathDmg === 0) {
         return { accepted: true, feedbackText: `✓ |${formatMathCompact(ok.target)}`, progressUpdated: true, nowSolved: true };
       }
-      return { accepted: false, feedbackText: `${mathDmg} not factor of ${formatMathCompact(ok.target)}`, progressUpdated: false, nowSolved: false };
+      return { accepted: false, feedbackText: `${formatMathCompact(mathDmg)} not factor of ${formatMathCompact(ok.target)}`, progressUpdated: false, nowSolved: false };
     }
     case 'approximate': {
       if (Math.abs(mathDmg - ok.target) <= ok.tolerance) {
@@ -389,8 +393,7 @@ export function evaluateHit(obj: MathObjective, mathDmg: number): EvalHitResult 
       };
     }
     case 'integralAccumulation': {
-      const currentSum = obj.acceptedHitValues.reduce((a, b) => a + b, 0);
-      const newSum = currentSum + mathDmg;
+      const newSum = sumAcceptedHits(obj) + mathDmg;
       const nowSolved = newSum >= ok.target;
       return {
         accepted: true,
@@ -431,7 +434,7 @@ export function applyAcceptedHit(obj: MathObjective, mathDmg: number, result: Ev
       break;
     case 'sumTarget':
     case 'integralAccumulation': {
-      const sum = obj.acceptedHitValues.reduce((a, b) => a + b, 0);
+      const sum = sumAcceptedHits(obj);
       obj.progress = Math.min(1, sum / obj.goal);
       break;
     }

@@ -289,7 +289,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
   const enemies: LaserEnemy[]    = [];
   const spawnQueue: SpawnEntry[] = [];
   let glowTimeS = 0;
-  let _lastDeltaMs = 0; // captured by draw() for math objective overlay ticks
+  let _currentDeltaMs = 0; // captured by draw() for math objective overlay ticks
   let _isActive = false;
   let rpgPhase: RpgPhase = 'alive';
   let phaseTimerMs     = 0;
@@ -1083,43 +1083,43 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
     fluid.render(ctx);
 
     drawLaserEnemies(ctx, enemies, nowMs);
-    drawMathObjectivesForArray(ctx, enemies, LASER_ENEMY_SIZE / 2, _lastDeltaMs);
+    drawMathObjectivesForArray(ctx, enemies, LASER_ENEMY_SIZE / 2, _currentDeltaMs);
     drawSapphireEnemies(ctx, sapphireEnemies);
-    drawMathObjectivesForArray(ctx, sapphireEnemies, SAPPHIRE_ENEMY_SIZE / 2, _lastDeltaMs);
+    drawMathObjectivesForArray(ctx, sapphireEnemies, SAPPHIRE_ENEMY_SIZE / 2, _currentDeltaMs);
     drawSapphireMissiles(ctx, sapphireMissiles);
     drawEmeraldEnemies(ctx, emeraldEnemies);
-    drawMathObjectivesForArray(ctx, emeraldEnemies, EMERALD_ENEMY_SIZE / 2, _lastDeltaMs);
+    drawMathObjectivesForArray(ctx, emeraldEnemies, EMERALD_ENEMY_SIZE / 2, _currentDeltaMs);
     drawAmberEnemies(ctx, amberEnemies);
-    drawMathObjectivesForArray(ctx, amberEnemies, AMBER_ENEMY_SIZE / 2, _lastDeltaMs);
+    drawMathObjectivesForArray(ctx, amberEnemies, AMBER_ENEMY_SIZE / 2, _currentDeltaMs);
     drawAmberShards(ctx, amberShards);
     drawVoidEnemies(ctx, voidEnemies);
-    drawMathObjectivesForArray(ctx, voidEnemies, VOID_ENEMY_SIZE / 2, _lastDeltaMs);
+    drawMathObjectivesForArray(ctx, voidEnemies, VOID_ENEMY_SIZE / 2, _currentDeltaMs);
     drawQuartzEnemies(ctx, quartzEnemies);
-    drawMathObjectivesForArray(ctx, quartzEnemies, QUARTZ_ENEMY_SIZE / 2, _lastDeltaMs);
+    drawMathObjectivesForArray(ctx, quartzEnemies, QUARTZ_ENEMY_SIZE / 2, _currentDeltaMs);
     drawQuartzSpikes(ctx, quartzSpikes);
     drawRubyEnemies(ctx, rubyEnemies);
-    drawMathObjectivesForArray(ctx, rubyEnemies, RUBY_ENEMY_SIZE / 2, _lastDeltaMs);
+    drawMathObjectivesForArray(ctx, rubyEnemies, RUBY_ENEMY_SIZE / 2, _currentDeltaMs);
     drawRubyBolts(ctx, rubyBolts);
     drawSunstoneEnemies(ctx, sunstoneEnemies);
-    drawMathObjectivesForArray(ctx, sunstoneEnemies, SUNSTONE_ENEMY_SIZE / 2, _lastDeltaMs);
+    drawMathObjectivesForArray(ctx, sunstoneEnemies, SUNSTONE_ENEMY_SIZE / 2, _currentDeltaMs);
     drawCitrineEnemies(ctx, citrineEnemies);
-    drawMathObjectivesForArray(ctx, citrineEnemies, CITRINE_ENEMY_SIZE / 2, _lastDeltaMs);
+    drawMathObjectivesForArray(ctx, citrineEnemies, CITRINE_ENEMY_SIZE / 2, _currentDeltaMs);
     drawCitrineBolts(ctx, citrineBolts);
     drawIoliteEnemies(ctx, ioliteEnemies);
-    drawMathObjectivesForArray(ctx, ioliteEnemies, IOLITE_ENEMY_SIZE / 2, _lastDeltaMs);
+    drawMathObjectivesForArray(ctx, ioliteEnemies, IOLITE_ENEMY_SIZE / 2, _currentDeltaMs);
     drawAmethystEnemies(ctx, amethystEnemies);
-    drawMathObjectivesForArray(ctx, amethystEnemies, AMETHYST_ENEMY_SIZE / 2, _lastDeltaMs);
+    drawMathObjectivesForArray(ctx, amethystEnemies, AMETHYST_ENEMY_SIZE / 2, _currentDeltaMs);
     drawAmethystShards(ctx, amethystShards);
     drawDiamondEnemies(ctx, diamondEnemies);
-    drawMathObjectivesForArray(ctx, diamondEnemies, DIAMOND_ENEMY_SIZE / 2, _lastDeltaMs);
+    drawMathObjectivesForArray(ctx, diamondEnemies, DIAMOND_ENEMY_SIZE / 2, _currentDeltaMs);
     drawDiamondShards(ctx, diamondShards);
     drawNullstoneEnemies(ctx, nullstoneEnemies);
-    drawMathObjectivesForArray(ctx, nullstoneEnemies, NULLSTONE_ENEMY_SIZE / 2, _lastDeltaMs);
+    drawMathObjectivesForArray(ctx, nullstoneEnemies, NULLSTONE_ENEMY_SIZE / 2, _currentDeltaMs);
     drawVoidTendrils(ctx, voidTendrils);
     drawFracterylEnemies(ctx, fracterylEnemies, fracterylShards);
-    drawMathObjectivesForArray(ctx, fracterylEnemies, FRACTERYL_ENEMY_SIZE / 2, _lastDeltaMs);
+    drawMathObjectivesForArray(ctx, fracterylEnemies, FRACTERYL_ENEMY_SIZE / 2, _currentDeltaMs);
     drawEigensteinEnemies(ctx, eigensteinEnemies);
-    drawMathObjectivesForArray(ctx, eigensteinEnemies, EIGENSTEIN_ENEMY_SIZE / 2, _lastDeltaMs);
+    drawMathObjectivesForArray(ctx, eigensteinEnemies, EIGENSTEIN_ENEMY_SIZE / 2, _currentDeltaMs);
     drawEigensteinBeams(ctx, eigensteinBeams, widthPx, heightPx);
     drawBottomSafeZone(ctx, isBossWaveActive, widthPx, heightPx, glowTimeS);
     drawDanmakuSafeZone(ctx, bossEnemy, danmakuSafeZone);
@@ -1264,7 +1264,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
     update(deltaMs: number, autoMoveEnabled = false): void {
       const nowMs = performance.now();
       glowTimeS += deltaMs / 1000;
-      _lastDeltaMs = deltaMs;
+      _currentDeltaMs = deltaMs;
       _autoMoveEnabled = autoMoveEnabled;
 
       if (rpgPhase === 'dying') {

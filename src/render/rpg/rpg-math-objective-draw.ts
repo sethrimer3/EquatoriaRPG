@@ -22,7 +22,7 @@ const FEEDBACK_FONT = '6px monospace';
 const FEEDBACK_OFFSET_Y = -12;   // px above ring centre
 const LABEL_CACHE_SIZE = 64;     // maximum entries in the text-width LRU cache
 
-// ── Text-width LRU cache (avoids measureText on every frame) ───
+// ── Text-width cache (FIFO eviction, avoids measureText on every frame) ─
 
 const _labelCache = new Map<string, number>();
 
@@ -67,9 +67,9 @@ export function drawMathObjective(
   ctx.stroke();
 
   // Filled arc — clockwise from top, colour shifts red as hp drops
-  const r = Math.round(255 * (1 - progress));
-  const g = Math.round(200 * progress);
-  ctx.strokeStyle = `rgb(${r},${g},80)`;
+  const redComponent = Math.round(255 * (1 - progress));
+  const greenComponent = Math.round(200 * progress);
+  ctx.strokeStyle = `rgb(${redComponent},${greenComponent},80)`;
   ctx.beginPath();
   ctx.arc(ex, ringCy, ringR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
   ctx.stroke();
