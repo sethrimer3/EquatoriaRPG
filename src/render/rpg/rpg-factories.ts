@@ -116,12 +116,20 @@ function maybeAttachMathObjective(
         return;
       }
       case 'diamond': {
+        // Scale exact targets proportionally to wave so they remain reachable by
+        // higher-ATK players.  At wave 31, exactScale ≈ 2.1; at wave 100 ≈ 5.0.
+        const exactScale = Math.max(1, getWaveStatScale(waveNumber) / 4);
         if (rand < 0.50) {
-          enemy.mathObjective = makeExactObjective(5 + Math.floor(Math.random() * 20), accentColor, 'equationSnake');
+          const target = Math.ceil((5 + Math.random() * 20) * exactScale);
+          enemy.mathObjective = makeExactObjective(target, accentColor, 'equationSnake');
         } else {
           const seqLen = 3 + Math.floor(Math.random() * 2);
           const seq: number[] = [];
-          for (let i = 0; i < seqLen; i++) seq.push(5 + Math.floor(Math.random() * 20));
+          let v = Math.ceil((5 + Math.random() * 20) * exactScale);
+          for (let i = 0; i < seqLen; i++) {
+            seq.push(v);
+            v += Math.ceil((3 + Math.random() * 8) * exactScale);
+          }
           enemy.mathObjective = makeSequenceObjective('exactSequence', accentColor, seq);
         }
         return;
@@ -174,13 +182,15 @@ function maybeAttachMathObjective(
         return;
       }
       case 'eigenstein': {
+        // Scale sequence values with wave so they match player's growing ATK.
+        const exactScale = Math.max(1, getWaveStatScale(waveNumber) / 4);
         if (rand < 0.50) {
           const seqLen = 3 + Math.floor(Math.random() * 3);
           const seq: number[] = [];
-          let v = 5 + Math.floor(Math.random() * 15);
+          let v = Math.ceil((5 + Math.random() * 15) * exactScale);
           for (let i = 0; i < seqLen; i++) {
             seq.push(v);
-            v += 3 + Math.floor(Math.random() * 8);
+            v += Math.ceil((3 + Math.random() * 8) * exactScale);
           }
           enemy.mathObjective = makeSequenceObjective('exactSequence', accentColor, seq);
         } else {

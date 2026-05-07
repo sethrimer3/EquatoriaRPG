@@ -84,6 +84,7 @@ import {
   drawEigensteinEnemies, drawEigensteinBeams,
   drawTeleportParticles,
   drawAlivenSwarmEnemies,
+  setLowGraphicsMode as setAdvEnemyLowGraphics,
 } from './rpg-enemy-draw-adv';
 import { drawMathObjectivesForArray } from './rpg-math-objective-draw';
 import {
@@ -1478,6 +1479,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
       fluid.setLowGraphicsMode(enabled);
       setEntityLowGraphics(enabled);
       setEnemyLowGraphics(enabled);
+      setAdvEnemyLowGraphics(enabled);
       setWeaponChainLowGraphics(enabled);
       setWeaponSwordLowGraphics(enabled);
       setBossLowGraphics(enabled);
