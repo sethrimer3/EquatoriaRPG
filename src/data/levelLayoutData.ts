@@ -17,7 +17,7 @@ function oid(prefix: string): string { return `${prefix}_${++_oidCounter}`; }
 
 export interface TeachChamberParams {
   roomId: string; roomName: string; floorColor: string;
-  shrineLabel?: string; enemyConcepts: string[]; mathMotifs?: string[]; objective: string;
+  shrineLabel?: string; enemyConcepts: string[]; mathMotifs?: string[]; objective?: string;
 }
 
 export interface CentralShrineArenaParams {
