@@ -521,3 +521,57 @@ export interface LuckyMotePopup {
   /** Total duration in ms. */
   maxTimerMs: number;
 }
+
+// ── Alivened swarm enemy ──────────────────────────────────────────
+
+/**
+ * A single particle within an AlivenSwarmEnemy.
+ *
+ * Each particle has its own position, velocity, and independent HP pool.
+ * Particles interact via a simplified 4-type Particle Life matrix stored
+ * on the parent swarm. When a particle's HP reaches 0 it is removed from
+ * `swarm.particles`; the swarm dies when all particles are gone.
+ *
+ * tierIndex (0-3) determines the particle's color and interaction behaviour:
+ *   0 → Ruby-red, 1 → Sapphire-blue, 2 → Emerald-green, 3 → Void-purple
+ */
+export interface AlivenSwarmParticle {
+  x: number; y: number;
+  vx: number; vy: number;
+  hp: number; maxHp: number;
+  tierIndex: number;  // 0–3
+  color: string;
+  glowColor: string;
+  /** Remaining cooldown in ms before this particle can deal contact damage again. */
+  contactCdMs: number;
+  hasHitPlayer: boolean;
+}
+
+/**
+ * A group enemy made of Particle Life-style interacting particles.
+ *
+ * - `x, y` is the centroid of all living particles (updated each frame).
+ * - `hp` is the total HP across all living particles (sum, updated each frame).
+ * - `nearestParticleIdx` is the index into `particles` of the particle
+ *   closest to the player — updated each frame and used by the damage
+ *   function to route hits to the correct particle.
+ * - `interactionMatrix` is a flat 16-element row-major [4×4] Float32Array
+ *   where `matrix[from * 4 + to]` is the attraction coefficient in [-1, 1].
+ *   Positive = attraction, negative = repulsion.
+ */
+export interface AlivenSwarmEnemy {
+  readonly kind: 'alivened';
+  /** Centroid (average of living particles), updated every frame. */
+  x: number; y: number;
+  /** Sum of all living particle HP, updated every frame. */
+  hp: number; maxHp: number;
+  atk: number; def: number;
+  particles: AlivenSwarmParticle[];
+  /** Flat [4×4] row-major interaction matrix. */
+  interactionMatrix: Float32Array;
+  /** Index of the living particle nearest the player. Updated each frame. */
+  nearestParticleIdx: number;
+  /** Slow group drift velocity toward the player. */
+  groupVx: number; groupVy: number;
+  mathObjective?: MathObjective;
+}

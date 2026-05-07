@@ -11,7 +11,7 @@
  */
 
 import type { MathObjective } from '../../sim/rpg/math-objective-types';
-import { tickObjectiveFeedback } from '../../sim/rpg/math-objectives';
+import { tickObjectiveFeedback, MATH_SOLVED_FLASH_MS } from '../../sim/rpg/math-objectives';
 
 // ── Layout constants ───────────────────────────────────────────
 
@@ -102,6 +102,30 @@ export function drawMathObjective(
   }
 
   ctx.restore();
+
+  // ── SOLVED burst animation ─────────────────────────────────
+  if (obj.solvedFlashMs !== undefined && obj.solvedFlashMs > 0) {
+    const t = 1 - obj.solvedFlashMs / MATH_SOLVED_FLASH_MS; // 0→1 as flash fades
+    const burstR = radius + 2 + t * (radius * 3 + 8);
+    const alpha = (1 - t) * 0.9;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = '#ffe566';
+    ctx.lineWidth = 1.5 + (1 - t) * 2;
+    ctx.shadowBlur = 6; ctx.shadowColor = '#ffe566';
+    ctx.beginPath();
+    ctx.arc(ex, ey, burstR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    // "SOLVED!" text that rises and fades
+    ctx.font = 'bold 7px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffe566';
+    ctx.globalAlpha = Math.max(0, (1 - t * 1.5));
+    ctx.fillText('SOLVED!', ex, ey - radius - 10 - t * 8);
+    ctx.restore();
+  }
 }
 
 // ── Array draw helper ──────────────────────────────────────────

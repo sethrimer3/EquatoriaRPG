@@ -30,7 +30,7 @@ import type {
   CitrineEnemy, CitrineBolt, IoliteEnemy,
   AmethystEnemy, AmethystShard, DiamondEnemy, DiamondShard,
   NullstoneEnemy, VoidTendril, FracterylEnemy, FracterylShard,
-  EigensteinEnemy, BossEnemy,
+  EigensteinEnemy, BossEnemy, AlivenSwarmEnemy,
 } from './rpg-enemy-types';
 import type { ClosestTarget } from './rpg-types';
 
@@ -72,6 +72,7 @@ export interface RpgPlayerAttackCtx {
   fracterylEnemies: FracterylEnemy[];
   fracterylShards: FracterylShard[];
   eigensteinEnemies: EigensteinEnemy[];
+  alivenedEnemies: AlivenSwarmEnemy[];
 
   // Per-enemy damage functions
   damageEnemy: (enemy: LaserEnemy, dmg: number, armorMult: number) => number;
@@ -98,6 +99,7 @@ export interface RpgPlayerAttackCtx {
   damageFracterylEnemy: (enemy: FracterylEnemy, dmg: number, armorMult: number) => number;
   damageFracterylShard: (shard: FracterylShard, dmg: number) => number;
   damageEigensteinEnemy: (enemy: EigensteinEnemy, dmg: number, armorMult: number) => number;
+  damageAlivenSwarmEnemy: (swarm: AlivenSwarmEnemy, dmg: number, armorMult: number) => number;
   damageBossEnemy: (rawDamage: number, defPierceRatio: number, fromDiamondBlade?: boolean) => number;
 
   // Visual spawners
@@ -137,6 +139,7 @@ export function performWeaponAttack(ctx: RpgPlayerAttackCtx, weaponId: string): 
     ioliteEnemies, amethystEnemies, amethystShards,
     diamondEnemies, diamondShards, nullstoneEnemies, voidTendrils,
     fracterylEnemies, fracterylShards, eigensteinEnemies,
+    alivenedEnemies,
     damageEnemy, damageSapphireEnemy, damageMissile,
     damageEmeraldEnemy, damageAmberEnemy, damageAmberShard,
     damageVoidEnemy, damageQuartzEnemy, damageQuartzSpike,
@@ -146,6 +149,7 @@ export function performWeaponAttack(ctx: RpgPlayerAttackCtx, weaponId: string): 
     damageDiamondEnemy, damageDiamondShard,
     damageNullstoneEnemy, damageVoidTendril,
     damageFracterylEnemy, damageFracterylShard, damageEigensteinEnemy,
+    damageAlivenSwarmEnemy,
     damageBossEnemy,
     spawnHitVisuals, spawnHitVisualsAt, fluid, findClosestTarget,
     spawnSandProjectile, spawnPoisonBolt, spawnEmeraldMissile, fireLaserBeam, layMine,
@@ -171,6 +175,7 @@ export function performWeaponAttack(ctx: RpgPlayerAttackCtx, weaponId: string): 
     + ioliteEnemies.length + amethystEnemies.length + amethystShards.length
     + diamondEnemies.length + diamondShards.length + nullstoneEnemies.length + voidTendrils.length
     + fracterylEnemies.length + fracterylShards.length + eigensteinEnemies.length
+    + alivenedEnemies.length
     + (bossEnemy ? 1 : 0);
   if (totalTargets === 0) return;
   const range     = weaponDef?.stats.range ?? PLAYER_BASE_RANGE_PX;
@@ -325,6 +330,13 @@ export function performWeaponAttack(ctx: RpgPlayerAttackCtx, weaponId: string): 
         spawnHitVisualsAt(enemy.x, enemy.y, enemy.maxHp, dmg, '#e6c850');
       }
     }
+    for (const swarm of alivenedEnemies) {
+      const dx = swarm.x - mote.x, dy = swarm.y - mote.y;
+      if (dx * dx + dy * dy <= aoeRadius * aoeRadius) {
+        const dmg = damageAlivenSwarmEnemy(swarm, rawDamage, 0);
+        spawnHitVisualsAt(swarm.x, swarm.y, swarm.maxHp, dmg, '#cc88ff');
+      }
+    }
     if (bossEnemy) {
       const dx = bossEnemy.x - mote.x, dy = bossEnemy.y - mote.y;
       if (dx * dx + dy * dy <= aoeRadius * aoeRadius) {
@@ -347,6 +359,7 @@ export function performWeaponAttack(ctx: RpgPlayerAttackCtx, weaponId: string): 
       iolite?: IoliteEnemy; amethyst?: AmethystEnemy; amethystshard?: AmethystShard;
       diamond?: DiamondEnemy; diamondshard?: DiamondShard; nullstone?: NullstoneEnemy; voidtendril?: VoidTendril;
       fracteryl?: FracterylEnemy; fracterylshard?: FracterylShard; eigenstein?: EigensteinEnemy;
+      alivened?: AlivenSwarmEnemy;
       boss?: BossEnemy;
     };
     const rangeSq = range * range;
@@ -471,6 +484,12 @@ export function performWeaponAttack(ctx: RpgPlayerAttackCtx, weaponId: string): 
       const d = dx * dx + dy * dy;
       if (d <= rangeSq) inRange.push({ distSq: d, eigenstein: e });
     }
+    for (const swarm of alivenedEnemies) {
+      if (swarm.particles.length === 0) continue;
+      const dx = swarm.x - mote.x, dy = swarm.y - mote.y;
+      const d = dx * dx + dy * dy;
+      if (d <= rangeSq) inRange.push({ distSq: d, alivened: swarm });
+    }
     if (bossEnemy) {
       const dx = bossEnemy.x - mote.x, dy = bossEnemy.y - mote.y;
       const d = dx * dx + dy * dy;
@@ -542,6 +561,9 @@ export function performWeaponAttack(ctx: RpgPlayerAttackCtx, weaponId: string): 
       } else if (t.eigenstein) {
         const dmg = damageEigensteinEnemy(t.eigenstein, rawDamage, 0);
         spawnHitVisualsAt(t.eigenstein.x, t.eigenstein.y, t.eigenstein.maxHp, dmg, '#50b464');
+      } else if (t.alivened) {
+        const dmg = damageAlivenSwarmEnemy(t.alivened, rawDamage, 0);
+        spawnHitVisualsAt(t.alivened.x, t.alivened.y, t.alivened.maxHp, dmg, '#cc88ff');
       } else if (t.boss) {
         const dmg = damageBossEnemy(rawDamage, 0);
         if (dmg > 0) spawnHitVisualsAt(t.boss.x, t.boss.y, t.boss.maxHp, dmg, '#50b464');
@@ -631,6 +653,10 @@ export function performWeaponAttack(ctx: RpgPlayerAttackCtx, weaponId: string): 
     const dmg = damageEigensteinEnemy(closestT.eigenstein, rawDamage, defPierceRatio);
     spawnHitVisualsAt(closestT.eigenstein.x, closestT.eigenstein.y, closestT.eigenstein.maxHp, dmg,
       effect.kind === 'piercing' ? '#74c0fc' : EIGENSTEIN_ENEMY_GLOW);
+  } else if (closestT.alivened) {
+    const dmg = damageAlivenSwarmEnemy(closestT.alivened, rawDamage, defPierceRatio);
+    spawnHitVisualsAt(closestT.alivened.x, closestT.alivened.y, closestT.alivened.maxHp, dmg,
+      effect.kind === 'piercing' ? '#74c0fc' : '#cc88ff');
   } else if (closestT.boss) {
     const dmg = damageBossEnemy(rawDamage, defPierceRatio);
     if (dmg > 0) spawnHitVisualsAt(closestT.boss.x, closestT.boss.y, closestT.boss.maxHp, dmg,

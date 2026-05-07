@@ -331,6 +331,7 @@ export function getWaveDefinition(waveNumber: number): WaveDefinition {
   const nullstoneCount = waveNumber >= 63  ? Math.min(1 + Math.floor((waveNumber - 62) * 0.05), 2) : 0;
   const fracterylCount = waveNumber >= 74  ? Math.min(1 + Math.floor((waveNumber - 73) * 0.04), 2) : 0;
   const eigensteinCount= waveNumber >= 85  ? Math.min(1 + Math.floor((waveNumber - 84) * 0.03), 2) : 0;
+  const alivenedCount  = waveNumber >= 95  ? Math.min(1 + Math.floor((waveNumber - 94) * 0.02), 2) : 0;
   const delay = Math.max(130, 600 - waveNumber * 18);
   const spawns: WaveSpawn[] = [
     { enemyTypeId: 'laser',  count: laserCount,  spawnDelay: delay },
@@ -349,5 +350,6 @@ export function getWaveDefinition(waveNumber: number): WaveDefinition {
   if (waveNumber >= 63)  spawns.push({ enemyTypeId: 'nullstone',  count: nullstoneCount,  spawnDelay: delay + 1500 });
   if (waveNumber >= 74)  spawns.push({ enemyTypeId: 'fracteryl',  count: fracterylCount,  spawnDelay: delay + 1700 });
   if (waveNumber >= 85)  spawns.push({ enemyTypeId: 'eigenstein', count: eigensteinCount, spawnDelay: delay + 2000 });
+  if (waveNumber >= 95)  spawns.push({ enemyTypeId: 'alivened',   count: alivenedCount,   spawnDelay: delay + 2300 });
   return { waveNumber, spawns };
 }

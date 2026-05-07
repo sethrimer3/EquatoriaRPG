@@ -309,13 +309,14 @@ import type {
   RubyEnemy, RubyBolt, SunstoneEnemy, CitrineEnemy, CitrineBolt,
   IoliteEnemy, AmethystEnemy, AmethystShard, DiamondEnemy, DiamondShard,
   NullstoneEnemy, VoidTendril, FracterylEnemy, FracterylShard, EigensteinEnemy,
-  BossEnemy,
+  BossEnemy, AlivenSwarmEnemy,
 } from './rpg-enemy-types';
 
 export type TargetKind = 'laser' | 'sapphire' | 'missile' | 'emerald' | 'amber' | 'ambershard' | 'void'
   | 'quartz' | 'quartzspike' | 'ruby' | 'rubybolt' | 'sunstone' | 'citrine' | 'citrinebolt'
   | 'iolite' | 'amethyst' | 'amethystshard' | 'diamond' | 'diamondshard' | 'nullstone' | 'voidtendril'
   | 'fracteryl' | 'fracterylshard' | 'eigenstein'
+  | 'alivened'
   | 'boss';
 
 export interface ClosestTarget {
@@ -346,6 +347,7 @@ export interface ClosestTarget {
   fracteryl?: FracterylEnemy;
   fracterylshard?: FracterylShard;
   eigenstein?: EigensteinEnemy;
+  alivened?: AlivenSwarmEnemy;
   boss?: BossEnemy;
 }
 

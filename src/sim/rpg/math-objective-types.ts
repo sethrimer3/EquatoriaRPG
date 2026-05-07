@@ -160,6 +160,14 @@ export interface MathObjective {
   /** True when objective is solved (triggers enemy.hp = 0) */
   solved: boolean;
 
+  /**
+   * Remaining ms for the "SOLVED!" burst animation.
+   * Set to SOLVED_FLASH_DURATION_MS when solved becomes true.
+   * Ticked down by tickObjectiveFeedback. Used by the draw layer to
+   * render an expanding gold ring around the enemy.
+   */
+  solvedFlashMs?: number;
+
   /** Current feedback message shown near enemy */
   feedback?: MathObjectiveFeedback;
 

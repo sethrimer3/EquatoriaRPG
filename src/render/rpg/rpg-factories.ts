@@ -9,7 +9,7 @@ import type {
   IoliteEnemy, AmethystEnemy, AmethystShard, DiamondEnemy, DiamondShard,
   NullstoneEnemy, VoidTendril,
   FracterylEnemy, FracterylShard, EigensteinEnemy, DanmakuSafeZone,
-  BossEnemy,
+  BossEnemy, AlivenSwarmEnemy, AlivenSwarmParticle,
 } from './rpg-enemy-types';
 import type { MathObjective } from '../../sim/rpg/math-objective-types';
 import {
@@ -22,6 +22,8 @@ import {
   makeFactorObjective,
   makeApproximateObjective,
   makeSequenceObjective,
+  makeIntegralObjective,
+  makeGeometryAreaObjective,
 } from '../../sim/rpg/math-objectives';
 import {
   LASER_HP_INIT, LASER_ATK_INIT, LASER_DEF_INIT, LASER_PATROL_TURN_MS,
@@ -64,18 +66,32 @@ import {
   FRACTERYL_SHARD_HP_INIT, FRACTERYL_SHARD_ATK_INIT, FRACTERYL_SHARD_LIFE_MS,
   EIGENSTEIN_HP_INIT, EIGENSTEIN_ATK_INIT, EIGENSTEIN_DEF_INIT,
   EIGENSTEIN_BEAM_CD_MS, EIGENSTEIN_BEAM_JITTER, EIGENSTEIN_PATROL_TURN_MS,
+  ALIVEN_PARTICLE_HP_INIT, ALIVEN_PARTICLE_ATK_INIT, ALIVEN_DEF_INIT,
+  ALIVEN_PARTICLE_COUNT, ALIVEN_INTERACTION_MATRIX, ALIVEN_PARTICLE_COLORS,
+  ALIVEN_CONTACT_CD_MS,
 } from './rpg-enemy-constants';
 
 /**
- * Randomly assigns a math objective to a body-enemy based on wave tier.
- * No-op if the random roll fails. Called at end of each body-enemy factory.
+ * Randomly assigns a math objective to a body-enemy based on wave tier and
+ * optionally an enemy-kind-specific bias.
  *
  * Spawn chances: waves 1-5 → 25%, 6-15 → 30%, 16-30 → 35%, 31+ → 40%.
+ *
+ * Per-kind biases (applied at wave 31+):
+ *  iolite    → integralAccumulation (60%) / sumTarget (40%)
+ *  diamond   → exact (50%) / sequence exactSequence (50%)
+ *  quartz    → factor (50%) / geometryArea (50%)
+ *  amethyst  → sequence increasing/differentValues (50%) / sumTarget (50%)
+ *  citrine   → modulo (50%) / digitEnding (50%)
+ *  nullstone → approximate (100%)
+ *  fracteryl → integralAccumulation (50%) / sumTarget (50%)
+ *  eigenstein→ sequence exactSequence (50%) / geometryArea (50%)
  */
 function maybeAttachMathObjective(
   enemy: { mathObjective?: MathObjective },
   waveNumber: number,
   accentColor: string,
+  enemyKind?: string,
 ): void {
   let chance: number;
   if (waveNumber <= 5) chance = 0.25;
@@ -86,6 +102,111 @@ function maybeAttachMathObjective(
   if (Math.random() >= chance) return;
 
   const rand = Math.random();
+
+  // ── Per-enemy-kind biases at wave 31+ ─────────────────────────
+  if (waveNumber > 30 && enemyKind) {
+    switch (enemyKind) {
+      case 'iolite': {
+        const intTarget = 80 + Math.floor(Math.random() * 200);
+        if (rand < 0.60) {
+          enemy.mathObjective = makeIntegralObjective(intTarget, accentColor);
+        } else {
+          enemy.mathObjective = makeSumTargetObjective(100 + Math.floor(Math.random() * 200), accentColor);
+        }
+        return;
+      }
+      case 'diamond': {
+        if (rand < 0.50) {
+          enemy.mathObjective = makeExactObjective(5 + Math.floor(Math.random() * 20), accentColor, 'equationSnake');
+        } else {
+          const seqLen = 3 + Math.floor(Math.random() * 2);
+          const seq: number[] = [];
+          for (let i = 0; i < seqLen; i++) seq.push(5 + Math.floor(Math.random() * 20));
+          enemy.mathObjective = makeSequenceObjective('exactSequence', accentColor, seq);
+        }
+        return;
+      }
+      case 'quartz': {
+        const FACTORS = [12, 18, 24, 30, 36, 42, 48, 60];
+        if (rand < 0.50) {
+          enemy.mathObjective = makeFactorObjective(
+            FACTORS[Math.floor(Math.random() * FACTORS.length)], accentColor,
+          );
+        } else {
+          const w = 4 + Math.floor(Math.random() * 8);
+          const h = 4 + Math.floor(Math.random() * 8);
+          enemy.mathObjective = makeGeometryAreaObjective(w, h, accentColor);
+        }
+        return;
+      }
+      case 'amethyst': {
+        if (rand < 0.50) {
+          const seqKind = rand < 0.25 ? 'increasing' : 'differentValues';
+          enemy.mathObjective = makeSequenceObjective(seqKind, accentColor);
+        } else {
+          enemy.mathObjective = makeSumTargetObjective(80 + Math.floor(Math.random() * 200), accentColor);
+        }
+        return;
+      }
+      case 'citrine': {
+        if (rand < 0.50) {
+          const moduli = [2, 3, 5, 7];
+          const m = moduli[Math.floor(Math.random() * moduli.length)];
+          enemy.mathObjective = makeModuloObjective(m, Math.floor(Math.random() * m), accentColor);
+        } else {
+          enemy.mathObjective = makeDigitEndingObjective(Math.floor(Math.random() * 10), accentColor);
+        }
+        return;
+      }
+      case 'nullstone': {
+        const target = 30 + Math.floor(Math.random() * 50);
+        const tol = 2 + Math.floor(Math.random() * 5);
+        enemy.mathObjective = makeApproximateObjective(target, tol, accentColor);
+        return;
+      }
+      case 'fracteryl': {
+        const fracTarget = 120 + Math.floor(Math.random() * 300);
+        if (rand < 0.50) {
+          enemy.mathObjective = makeIntegralObjective(fracTarget, accentColor);
+        } else {
+          enemy.mathObjective = makeSumTargetObjective(fracTarget, accentColor);
+        }
+        return;
+      }
+      case 'eigenstein': {
+        if (rand < 0.50) {
+          const seqLen = 3 + Math.floor(Math.random() * 3);
+          const seq: number[] = [];
+          let v = 5 + Math.floor(Math.random() * 15);
+          for (let i = 0; i < seqLen; i++) {
+            seq.push(v);
+            v += 3 + Math.floor(Math.random() * 8);
+          }
+          enemy.mathObjective = makeSequenceObjective('exactSequence', accentColor, seq);
+        } else {
+          const w = 5 + Math.floor(Math.random() * 10);
+          const h = 5 + Math.floor(Math.random() * 10);
+          enemy.mathObjective = makeGeometryAreaObjective(w, h, accentColor);
+        }
+        return;
+      }
+      case 'alivened': {
+        // Each hit is per-particle, so hitCount and sumTarget reward consistent pressure
+        if (rand < 0.50) {
+          enemy.mathObjective = makeHitCountObjective(
+            ALIVEN_PARTICLE_COUNT + Math.floor(Math.random() * ALIVEN_PARTICLE_COUNT), accentColor,
+          );
+        } else {
+          enemy.mathObjective = makeSumTargetObjective(
+            ALIVEN_PARTICLE_COUNT * 30 + Math.floor(Math.random() * 200), accentColor,
+          );
+        }
+        return;
+      }
+    }
+  }
+
+  // ── Wave-tier generic bucket ───────────────────────────────────
   if (waveNumber <= 5) {
     if (rand < 0.5) {
       enemy.mathObjective = makeThresholdObjective(8 + Math.floor(Math.random() * 8), accentColor);
@@ -124,31 +245,39 @@ function maybeAttachMathObjective(
       enemy.mathObjective = makeSumTargetObjective(50 + Math.floor(Math.random() * 100), accentColor);
     }
   } else {
+    // Late-game generic bucket — now includes integral and geometry
     const FACTORS_LATE = [12, 18, 24, 30, 36, 42, 48, 60];
-    if (rand < 0.15) {
+    const GEO_DIMS = [4, 5, 6, 7, 8, 9, 10, 12];
+    if (rand < 0.12) {
       enemy.mathObjective = makeThresholdObjective(30 + Math.floor(Math.random() * 60), accentColor);
-    } else if (rand < 0.25) {
+    } else if (rand < 0.22) {
       enemy.mathObjective = makeExactObjective(20 + Math.floor(Math.random() * 50), accentColor);
-    } else if (rand < 0.35) {
+    } else if (rand < 0.31) {
       enemy.mathObjective = makeDigitEndingObjective(Math.floor(Math.random() * 10), accentColor);
-    } else if (rand < 0.45) {
+    } else if (rand < 0.40) {
       const moduli = [2, 3, 5, 7];
       const m = moduli[Math.floor(Math.random() * moduli.length)];
       enemy.mathObjective = makeModuloObjective(m, Math.floor(Math.random() * m), accentColor);
-    } else if (rand < 0.55) {
+    } else if (rand < 0.50) {
       enemy.mathObjective = makeFactorObjective(
         FACTORS_LATE[Math.floor(Math.random() * FACTORS_LATE.length)], accentColor,
       );
-    } else if (rand < 0.65) {
+    } else if (rand < 0.60) {
       enemy.mathObjective = makeSumTargetObjective(80 + Math.floor(Math.random() * 200), accentColor);
-    } else if (rand < 0.75) {
+    } else if (rand < 0.68) {
       enemy.mathObjective = makeHitCountObjective(4 + Math.floor(Math.random() * 3), accentColor);
-    } else if (rand < 0.85) {
+    } else if (rand < 0.76) {
       const target = 20 + Math.floor(Math.random() * 60);
       const tol = 3 + Math.floor(Math.random() * 5);
       enemy.mathObjective = makeApproximateObjective(target, tol, accentColor);
-    } else {
+    } else if (rand < 0.84) {
       enemy.mathObjective = makeSequenceObjective('increasing', accentColor);
+    } else if (rand < 0.92) {
+      enemy.mathObjective = makeIntegralObjective(80 + Math.floor(Math.random() * 200), accentColor);
+    } else {
+      const w = GEO_DIMS[Math.floor(Math.random() * GEO_DIMS.length)];
+      const h = GEO_DIMS[Math.floor(Math.random() * GEO_DIMS.length)];
+      enemy.mathObjective = makeGeometryAreaObjective(w, h, accentColor);
     }
   }
 }
@@ -171,7 +300,7 @@ export function makeLaserEnemy(x: number, y: number, waveNumber: number): LaserE
     patrolTimerMs: Math.random() * LASER_PATROL_TURN_MS,
     hasHitPlayer: false,
   };
-  maybeAttachMathObjective(enemy, waveNumber, '#d3f3ff');
+  maybeAttachMathObjective(enemy, waveNumber, '#d3f3ff', 'laser');
   return enemy;
 }
 
@@ -185,7 +314,7 @@ export function makeSapphireEnemy(x: number, y: number, waveNumber: number): Sap
     missileTimerMs: SAPPHIRE_MISSILE_CD_MS + Math.random() * SAPPHIRE_MISSILE_JITTER,
     patrolTimerMs: Math.random() * SAPPHIRE_PATROL_TURN_MS,
   };
-  maybeAttachMathObjective(enemy, waveNumber, '#6bd9ff');
+  maybeAttachMathObjective(enemy, waveNumber, '#6bd9ff', 'sapphire');
   return enemy;
 }
 
@@ -214,7 +343,7 @@ export function makeEmeraldEnemy(x: number, y: number, waveNumber: number): Emer
     ghostX: x, ghostY: y, ghostAlpha: 0,
     hasHitPlayer: false,
   };
-  maybeAttachMathObjective(enemy, waveNumber, '#8fff8f');
+  maybeAttachMathObjective(enemy, waveNumber, '#8fff8f', enemy.kind);
   return enemy;
 }
 
@@ -228,7 +357,7 @@ export function makeAmberEnemy(x: number, y: number, waveNumber: number): AmberE
     missileTimerMs: AMBER_MISSILE_CD_MS + Math.random() * AMBER_MISSILE_JITTER,
     patrolTimerMs: Math.random() * AMBER_PATROL_TURN_MS,
   };
-  maybeAttachMathObjective(enemy, waveNumber, '#ffb86c');
+  maybeAttachMathObjective(enemy, waveNumber, '#ffb86c', enemy.kind);
   return enemy;
 }
 
@@ -254,7 +383,7 @@ export function makeVoidEnemy(x: number, y: number, waveNumber: number): VoidEne
     contactCdMs: 0,
     pulseMs: Math.random() * VOID_AURA_PULSE_MS,
   };
-  maybeAttachMathObjective(enemy, waveNumber, '#7b68ee');
+  maybeAttachMathObjective(enemy, waveNumber, '#7b68ee', enemy.kind);
   return enemy;
 }
 
@@ -269,7 +398,7 @@ export function makeQuartzEnemy(x: number, y: number, waveNumber: number): Quart
     strafeDirFlipMs: 2000 + Math.random() * 2000,
     strafeDir: (Math.random() < 0.5 ? 1 : -1) as 1 | -1,
   };
-  maybeAttachMathObjective(enemy, waveNumber, '#e0e0e0');
+  maybeAttachMathObjective(enemy, waveNumber, '#e0e0e0', enemy.kind);
   return enemy;
 }
 
@@ -294,7 +423,7 @@ export function makeRubyEnemy(x: number, y: number, waveNumber: number): RubyEne
     patrolTimerMs: Math.random() * 2000,
     consecutiveShots: 0,
   };
-  maybeAttachMathObjective(enemy, waveNumber, '#ff6b6b');
+  maybeAttachMathObjective(enemy, waveNumber, '#ff6b6b', enemy.kind);
   return enemy;
 }
 
@@ -318,7 +447,7 @@ export function makeSunstoneEnemy(x: number, y: number, waveNumber: number): Sun
     pulseTimerMs: SUNSTONE_PULSE_CD_MS + Math.random() * SUNSTONE_PULSE_JITTER,
     orbitAngle: Math.random() * Math.PI * 2,
   };
-  maybeAttachMathObjective(enemy, waveNumber, '#ffd700');
+  maybeAttachMathObjective(enemy, waveNumber, '#ffd700', enemy.kind);
   return enemy;
 }
 
@@ -332,7 +461,7 @@ export function makeCitrineEnemy(x: number, y: number, waveNumber: number): Citr
     boltTimerMs: CITRINE_BOLT_CD_MS + Math.random() * CITRINE_BOLT_JITTER,
     patrolTimerMs: Math.random() * CITRINE_PATROL_TURN_MS,
   };
-  maybeAttachMathObjective(enemy, waveNumber, '#fff176');
+  maybeAttachMathObjective(enemy, waveNumber, '#fff176', enemy.kind);
   return enemy;
 }
 
@@ -358,7 +487,7 @@ export function makeIoliteEnemy(x: number, y: number, waveNumber: number): Iolit
     beamTimerMs: IOLITE_BEAM_CD_MS + Math.random() * IOLITE_BEAM_JITTER,
     patrolTimerMs: Math.random() * IOLITE_PATROL_TURN_MS,
   };
-  maybeAttachMathObjective(enemy, waveNumber, '#9b59b6');
+  maybeAttachMathObjective(enemy, waveNumber, '#9b59b6', enemy.kind);
   return enemy;
 }
 
@@ -374,7 +503,7 @@ export function makeAmethystEnemy(x: number, y: number, waveNumber: number): Ame
     burstTimerMs: AMETHYST_BURST_CD_MS + Math.random() * AMETHYST_BURST_JITTER,
     patrolTimerMs: Math.random() * AMETHYST_PATROL_TURN_MS,
   };
-  maybeAttachMathObjective(enemy, waveNumber, '#b388ff');
+  maybeAttachMathObjective(enemy, waveNumber, '#b388ff', enemy.kind);
   return enemy;
 }
 
@@ -400,7 +529,7 @@ export function makeDiamondEnemy(x: number, y: number, waveNumber: number): Diam
     shardTimerMs: DIAMOND_SHARD_CD_MS + Math.random() * 500,
     orbitAngle: Math.random() * Math.PI * 2,
   };
-  maybeAttachMathObjective(enemy, waveNumber, '#e0e0ff');
+  maybeAttachMathObjective(enemy, waveNumber, '#e0e0ff', enemy.kind);
   return enemy;
 }
 
@@ -428,7 +557,7 @@ export function makeNullstoneEnemy(x: number, y: number, waveNumber: number): Nu
     patrolTimerMs: Math.random() * NULLSTONE_PATROL_TURN_MS,
     pulseMs: Math.random() * 2000,
   };
-  maybeAttachMathObjective(enemy, waveNumber, '#2c2c2c');
+  maybeAttachMathObjective(enemy, waveNumber, '#2c2c2c', enemy.kind);
   return enemy;
 }
 
@@ -454,7 +583,7 @@ export function makeFracterylEnemy(x: number, y: number, waveNumber: number): Fr
     orbitAngle: Math.random() * Math.PI * 2,
     pulseMs: Math.random() * 2000,
   };
-  maybeAttachMathObjective(enemy, waveNumber, '#ff69b4');
+  maybeAttachMathObjective(enemy, waveNumber, '#ff69b4', enemy.kind);
   return enemy;
 }
 
@@ -483,7 +612,7 @@ export function makeEigensteinEnemy(x: number, y: number, waveNumber: number): E
     patrolTimerMs: Math.random() * EIGENSTEIN_PATROL_TURN_MS,
     pulseMs: Math.random() * 2000,
   };
-  maybeAttachMathObjective(enemy, waveNumber, '#00ffff');
+  maybeAttachMathObjective(enemy, waveNumber, '#00ffff', enemy.kind);
   return enemy;
 }
 
@@ -529,4 +658,55 @@ export function makeBossEnemy(rawBossId: number, waveNumber: number, w: number, 
     danmakuLevel: 0,
     isFiringPaused: false,
   };
+}
+
+/**
+ * Creates a new AlivenSwarmEnemy at (spawnX, spawnY).
+ *
+ * The swarm is composed of ALIVEN_PARTICLE_COUNT individual particles,
+ * evenly distributed across the 4 tier types (0-3). Particles are
+ * offset randomly from the spawn point so the swarm fans out naturally.
+ */
+export function makeAlivenSwarmEnemy(
+  spawnX: number,
+  spawnY: number,
+  waveNumber: number,
+): AlivenSwarmEnemy {
+  const scale = getWaveStatScale(waveNumber);
+  const particleHp = Math.ceil(ALIVEN_PARTICLE_HP_INIT * scale);
+  const particles: AlivenSwarmParticle[] = [];
+
+  for (let i = 0; i < ALIVEN_PARTICLE_COUNT; i++) {
+    const tierIndex = i % 4;
+    const [color, glowColor] = ALIVEN_PARTICLE_COLORS[tierIndex];
+    const angle = (i / ALIVEN_PARTICLE_COUNT) * Math.PI * 2 + Math.random() * 0.5;
+    const r = 6 + Math.random() * 12;
+    particles.push({
+      x: spawnX + Math.cos(angle) * r,
+      y: spawnY + Math.sin(angle) * r,
+      vx: (Math.random() - 0.5) * 0.5,
+      vy: (Math.random() - 0.5) * 0.5,
+      hp: particleHp, maxHp: particleHp,
+      tierIndex,
+      color, glowColor,
+      contactCdMs: Math.random() * ALIVEN_CONTACT_CD_MS,
+      hasHitPlayer: false,
+    });
+  }
+
+  const totalHp = particleHp * ALIVEN_PARTICLE_COUNT;
+  const swarm: AlivenSwarmEnemy = {
+    kind: 'alivened',
+    x: spawnX, y: spawnY,
+    hp: totalHp, maxHp: totalHp,
+    atk: Math.ceil(ALIVEN_PARTICLE_ATK_INIT * scale),
+    def: Math.ceil(ALIVEN_DEF_INIT * scale),
+    particles,
+    interactionMatrix: ALIVEN_INTERACTION_MATRIX,
+    nearestParticleIdx: 0,
+    groupVx: 0, groupVy: 0,
+  };
+  // AlivenSwarm biased toward hitCount / sumTarget since each particle hit is individual
+  maybeAttachMathObjective(swarm, waveNumber, '#cc88ff', 'alivened');
+  return swarm;
 }

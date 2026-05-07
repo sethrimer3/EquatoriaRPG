@@ -24,6 +24,7 @@ import type {
   NullstoneEnemy, VoidTendril,
   FracterylEnemy, FracterylShard,
   EigensteinEnemy,
+  AlivenSwarmEnemy,
 } from './rpg-enemy-types';
 import type { MathObjective } from '../../sim/rpg/math-objective-types';
 import {
@@ -394,6 +395,58 @@ export function createDamageFns(ctx: DamageCtx) {
     return dmg;
   }
 
+  /**
+   * Damages the living particle in the swarm that is nearest to the player
+   * (pre-computed each frame as `swarm.nearestParticleIdx`).
+   *
+   * DEF is applied once against the raw damage to get effectiveDmg, then
+   * applied to the individual particle's HP. If the swarm has a math
+   * objective the damage is routed through it instead. After hitting a
+   * particle, the swarm's total HP is recomputed.
+   *
+   * Returns the actual damage dealt (0 if fully absorbed by DEF).
+   */
+  function damageAlivenSwarmEnemy(
+    swarm: AlivenSwarmEnemy,
+    rawDamage: number,
+    defPierceRatio: number,
+  ): number {
+    if (swarm.particles.length === 0) return 0;
+    const effectiveDef = swarm.def * (1 - defPierceRatio);
+    const dmg = Math.max(0, rawDamage - effectiveDef);
+
+    // Math objective: routes damage through the objective; counts against total swarm HP
+    const mathResult = maybeApplyMathObjectiveDamage(swarm, dmg);
+    if (mathResult !== null) {
+      if (mathResult > 0) {
+        // Distribute math-objective hit damage across the nearest particle
+        const idx = Math.min(swarm.nearestParticleIdx, swarm.particles.length - 1);
+        swarm.particles[idx].hp = Math.max(0, swarm.particles[idx].hp - mathResult);
+        if (swarm.particles[idx].hp <= 0) {
+          swarm.particles.splice(idx, 1);
+          swarm.nearestParticleIdx = Math.min(swarm.nearestParticleIdx, swarm.particles.length - 1);
+        }
+        // Recompute total HP
+        swarm.hp = swarm.particles.reduce((s, p) => s + p.hp, 0);
+        recordDps(mathResult, '#cc88ff');
+      }
+      return mathResult;
+    }
+
+    if (dmg <= 0) return 0;
+
+    // Normal damage: hits nearest particle
+    const idx = Math.min(swarm.nearestParticleIdx, swarm.particles.length - 1);
+    swarm.particles[idx].hp = Math.max(0, swarm.particles[idx].hp - dmg);
+    if (swarm.particles[idx].hp <= 0) {
+      swarm.particles.splice(idx, 1);
+      swarm.nearestParticleIdx = Math.min(swarm.nearestParticleIdx, swarm.particles.length - 1);
+    }
+    swarm.hp = swarm.particles.reduce((s, p) => s + p.hp, 0);
+    recordDps(dmg, '#cc88ff');
+    return dmg;
+  }
+
   return {
     damageEnemy,
     damageSapphireEnemy,
@@ -419,5 +472,6 @@ export function createDamageFns(ctx: DamageCtx) {
     damageFracterylEnemy,
     damageFracterylShard,
     damageEigensteinEnemy,
+    damageAlivenSwarmEnemy,
   };
 }

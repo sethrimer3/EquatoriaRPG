@@ -42,12 +42,13 @@ import {
   FLUID_NULLSTONE_R, FLUID_NULLSTONE_G, FLUID_NULLSTONE_B,
   FLUID_FRACTERYL_R, FLUID_FRACTERYL_G, FLUID_FRACTERYL_B,
   FLUID_EIGENSTEIN_R, FLUID_EIGENSTEIN_G, FLUID_EIGENSTEIN_B,
+  FLUID_ALIVEN_R, FLUID_ALIVEN_G, FLUID_ALIVEN_B,
 } from './rpg-constants';
 import {
   LASER_XP_MULT, SAPPHIRE_XP_MULT, EMERALD_XP_MULT, AMBER_XP_MULT, VOID_XP_MULT,
   QUARTZ_XP_MULT, RUBY_XP_MULT, SUNSTONE_XP_MULT, CITRINE_XP_MULT,
   IOLITE_XP_MULT, AMETHYST_XP_MULT, DIAMOND_XP_MULT, NULLSTONE_XP_MULT,
-  FRACTERYL_XP_MULT, EIGENSTEIN_XP_MULT,
+  FRACTERYL_XP_MULT, EIGENSTEIN_XP_MULT, ALIVEN_XP_MULT,
 } from './rpg-enemy-constants';
 import { trySpawnLuckyMote } from './rpg-lucky-motes';
 import { spawnEnemyById } from './rpg-enemy-spawn';
@@ -62,7 +63,7 @@ import type {
   DiamondEnemy, DiamondShard, NullstoneEnemy, VoidTendril,
   FracterylEnemy, FracterylShard, EigensteinEnemy,
   BossEnemy, BossProjectile,
-  LuckyMote,
+  LuckyMote, AlivenSwarmEnemy,
 } from './rpg-enemy-types';
 
 // ── Dependency-injection context ──────────────────────────────────────────
@@ -97,6 +98,7 @@ export interface WaveManagerCtx {
   fracterylEnemies: FracterylEnemy[];
   fracterylShards: FracterylShard[];
   eigensteinEnemies: EigensteinEnemy[];
+  alivenedEnemies: AlivenSwarmEnemy[];
   bossProjectiles: BossProjectile[];
   spawnQueue: SpawnEntry[];
   luckyMotes: LuckyMote[];
@@ -142,6 +144,7 @@ export function createWaveManager(ctx: WaveManagerCtx): WaveManagerHandle {
     rubyEnemies, rubyBolts, sunstoneEnemies, citrineEnemies, citrineBolts,
     ioliteEnemies, amethystEnemies, amethystShards, diamondEnemies, diamondShards,
     nullstoneEnemies, voidTendrils, fracterylEnemies, fracterylShards, eigensteinEnemies,
+    alivenedEnemies,
     bossProjectiles, spawnQueue, luckyMotes, fluid,
     getCachedLuckPercent, applyEquipmentStats, spawnDamageNumber,
   } = ctx;
@@ -369,6 +372,20 @@ export function createWaveManager(ctx: WaveManagerCtx): WaveManagerHandle {
         eigensteinEnemies.splice(i, 1);
       }
     }
+    // Alivened swarms: dead when all particles are gone (hp reaches 0)
+    for (let i = alivenedEnemies.length - 1; i >= 0; i--) {
+      if (alivenedEnemies[i].hp <= 0 || alivenedEnemies[i].particles.length === 0) {
+        const swarm = alivenedEnemies[i];
+        fluid.addExplosion(
+          swarm.x, swarm.y,
+          FLUID_EXPLOSION_STRENGTH * 3.0,
+          FLUID_ALIVEN_R, FLUID_ALIVEN_G, FLUID_ALIVEN_B,
+        );
+        totalXpFromKills += getXpPerKill(ctx.getCurrentWave()) * ALIVEN_XP_MULT;
+        trySpawnLuckyMote(luckyMotes, 'alivened', swarm.x, swarm.y, getCachedLuckPercent());
+        alivenedEnemies.splice(i, 1);
+      }
+    }
     // Boss defeat
     const bossEnemy = ctx.getBossEnemy();
     if (bossEnemy && bossEnemy.hp <= 0) {
@@ -424,6 +441,7 @@ export function createWaveManager(ctx: WaveManagerCtx): WaveManagerHandle {
         || citrineEnemies.length > 0 || ioliteEnemies.length > 0 || amethystEnemies.length > 0
         || diamondEnemies.length > 0 || nullstoneEnemies.length > 0
         || fracterylEnemies.length > 0 || eigensteinEnemies.length > 0
+        || alivenedEnemies.length > 0
         || ctx.getBossEnemy() !== null) return;
     ctx.setIsInterWave(true);
     ctx.setInterWaveTimerMs(INTER_WAVE_DELAY_MS);

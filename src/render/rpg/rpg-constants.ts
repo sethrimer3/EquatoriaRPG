@@ -283,6 +283,8 @@ export const FLUID_NULLSTONE_R =  30, FLUID_NULLSTONE_G =  30, FLUID_NULLSTONE_B
 export const FLUID_FRACTERYL_R = 204, FLUID_FRACTERYL_G =  68, FLUID_FRACTERYL_B = 255;
 // Eigenstein enemy colour.
 export const FLUID_EIGENSTEIN_R =  68, FLUID_EIGENSTEIN_G = 204, FLUID_EIGENSTEIN_B = 255;
+// Alivened swarm — violet/purple averaged across 4 particle types.
+export const FLUID_ALIVEN_R = 153, FLUID_ALIVEN_G =  51, FLUID_ALIVEN_B = 255;
 
 // ── Lucky mote drop constants ──────────────────────────────────
 /** Visual radius (px) of a lucky mote. */
