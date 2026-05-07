@@ -215,7 +215,7 @@ export async function startApp(): Promise<void> {
 
   registerLevelLauncher((worldId, levelId) => {
     const levelDef = WORLD_LEVEL_PLANS.get(levelId);
-    const worldColor = WORLD_COLOR_MAP.get(worldId) ?? '#80c8ff';
+    const worldColor = WORLD_COLOR_MAP.get(worldId) ?? WORLD_COLOR_MAP.get('origin_nexus') ?? '#80c8ff';
     if (levelDef) {
       levelScreen.show(levelDef, worldColor);
     } else {
