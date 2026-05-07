@@ -87,14 +87,23 @@ export function getLevelUnlockState(
 }
 
 /**
+ * Index of the mandatory level (0-based) that must be complete to unlock the
+ * Base6 set for a given world. Index 4 corresponds to mandatory level 5.
+ */
+const BASE6_UNLOCK_LEVEL_INDEX = 4;
+
+/**
  * Check whether a Base6 challenge is unlocked.
  * Base6 set unlocks after mandatory level 5 (index 4) is completed.
+ * The specific `base6Id` is accepted for API consistency but not evaluated here —
+ * all six challenges in a world share the same unlock gate.
  */
 export function isBase6LevelUnlocked(
   state: WorldMapProgressionState,
   worldId: WorldId,
-  _base6Id: string,
+  base6Id: string,
 ): boolean {
+  void base6Id; // all Base6 challenges share the same world-level unlock gate
   if (state.devMode) return true;
 
   const worldProgress = state.worlds.get(worldId);
@@ -104,8 +113,8 @@ export function isBase6LevelUnlocked(
   const worldData = WORLD_MAP_DATA.find(w => w.id === worldId);
   if (!worldData) return false;
 
-  const level5 = worldData.mandatoryLevels[4]; // index 4 = level 5
-  return level5 !== undefined && worldProgress.completedMandatoryLevelIds.has(level5.id);
+  const unlockLevel = worldData.mandatoryLevels[BASE6_UNLOCK_LEVEL_INDEX];
+  return unlockLevel !== undefined && worldProgress.completedMandatoryLevelIds.has(unlockLevel.id);
 }
 
 // ─── Mutations ────────────────────────────────────────────────────

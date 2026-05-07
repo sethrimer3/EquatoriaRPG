@@ -52,7 +52,20 @@ interface WorldNode {
 
 const NODE_RADIUS = 18;
 const BOSS_NODE_RADIUS = 22;
-const NODE_PADDING = 0.08; // fraction of canvas dimension kept as margin
+const NODE_PADDING = 0.08;        // fraction of canvas dimension kept as margin
+/** Extra hit-test radius beyond visual radius so nodes are easy to tap. */
+const NODE_HIT_EXPAND = 8;
+/**
+ * Perpendicular offset factor for path quadratic curves.
+ * A small value (0.12) produces a gentle arc without dramatic bending.
+ */
+const PATH_CURVE_FACTOR = 0.12;
+/**
+ * Device pixel ratio is capped at 2 to limit canvas memory usage on very
+ * high-DPI displays (3x+), where the extra sharpness provides diminishing
+ * returns while significantly increasing buffer size.
+ */
+const MAX_DPR = 2;
 
 const COLOR_LOCKED     = '#3a3a4a';
 const COLOR_UNLOCKED   = '#c8a840';
@@ -151,8 +164,8 @@ export function createWorldMapScreen(
     };
   }
 
-  /** Returns true if the last mandatory level of a world is a boss level. */
-  function hasBossLevel(mandatoryLevels: { type: string }[]): boolean {
+  /** Returns true if the last mandatory level of the world is typed as a boss. */
+  function hasTerminalBossLevel(mandatoryLevels: { type: string }[]): boolean {
     return mandatoryLevels[mandatoryLevels.length - 1]?.type === 'boss';
   }
 
@@ -164,7 +177,7 @@ export function createWorldMapScreen(
         worldId: world.id,
         cx,
         cy,
-        radius: hasBossLevel(world.mandatoryLevels) ? BOSS_NODE_RADIUS : NODE_RADIUS,
+        radius: hasTerminalBossLevel(world.mandatoryLevels) ? BOSS_NODE_RADIUS : NODE_RADIUS,
       };
     });
   }
@@ -202,8 +215,8 @@ export function createWorldMapScreen(
       ctx.beginPath();
       ctx.moveTo(a.cx, a.cy);
       // Simple curve through midpoint
-      const mx = (a.cx + b.cx) / 2 + (b.cy - a.cy) * 0.12;
-      const my = (a.cy + b.cy) / 2 - (b.cx - a.cx) * 0.12;
+      const mx = (a.cx + b.cx) / 2 + (b.cy - a.cy) * PATH_CURVE_FACTOR;
+      const my = (a.cy + b.cy) / 2 - (b.cx - a.cx) * PATH_CURVE_FACTOR;
       ctx.quadraticCurveTo(mx, my, b.cx, b.cy);
       ctx.strokeStyle = gradient;
       ctx.lineWidth = 2.5;
@@ -219,7 +232,7 @@ export function createWorldMapScreen(
 
       const color = nodeColor(node.worldId);
       const isSelected = node.worldId === selectedWorldId;
-      const isBossWorld = hasBossLevel(worldData.mandatoryLevels);
+      const isBossWorld = hasTerminalBossLevel(worldData.mandatoryLevels);
 
       // Glow for unlocked/current/completed
       const s = getWorldUnlockState(state, node.worldId);
@@ -279,6 +292,7 @@ export function createWorldMapScreen(
       ctx.font = `${Math.round(node.radius * 0.55)}px 'Poiret One', sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
+      // Abbreviated world name: first two words. Single-word names display as-is.
       const shortName = worldData.name.split(' ').slice(0, 2).join(' ');
       ctx.fillText(shortName, node.cx, node.cy + node.radius + 4);
 
@@ -518,7 +532,7 @@ export function createWorldMapScreen(
     for (const node of nodes) {
       const dx = px - node.cx;
       const dy = py - node.cy;
-      if (dx * dx + dy * dy <= (node.radius + 8) ** 2) return node;
+      if (dx * dx + dy * dy <= (node.radius + NODE_HIT_EXPAND) ** 2) return node;
     }
     return null;
   }
@@ -576,7 +590,7 @@ export function createWorldMapScreen(
 
   function resize(): void {
     const { width, height } = canvasArea.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     // Reset the transform before applying DPR scale to avoid compounding on repeated calls.
