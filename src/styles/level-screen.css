@@ -1,0 +1,162 @@
+/* ═══════════════════════════════════════════════════════════════
+   Level Screen Styles
+   Full-screen overlay showing a top-down level layout on canvas.
+   Uses the existing CSS variable palette from base.css.
+   ═══════════════════════════════════════════════════════════════ */
+
+.ls-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 85; /* above world map (80), below main-menu (90) */
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-primary);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  overflow: hidden;
+}
+
+.ls-screen.ls-screen--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ls-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--accent-border);
+  flex-shrink: 0;
+  min-height: 48px;
+}
+
+.ls-back-btn {
+  background: transparent;
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  color: var(--accent);
+  font-family: var(--font-primary);
+  font-size: 14px;
+  padding: 6px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s, border-color 0.2s;
+  min-width: 44px;
+  min-height: 36px;
+}
+
+.ls-back-btn:hover,
+.ls-back-btn:focus-visible {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  outline: none;
+}
+
+.ls-header-title {
+  flex: 1;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 12px var(--accent-glow);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ls-world-tag {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  text-transform: capitalize;
+  flex-shrink: 0;
+}
+
+.ls-canvas-area {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 50%, rgba(26,26,46,0.9) 0%, var(--bg-primary) 100%);
+}
+
+.ls-canvas-area canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ls-info-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--accent-border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.ls-objective {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-primary);
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.ls-archetype {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  text-transform: capitalize;
+}
+
+.ls-play-btn {
+  background: transparent;
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  color: var(--accent);
+  font-family: var(--font-primary);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 16px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  min-height: 36px;
+  white-space: nowrap;
+}
+
+.ls-play-btn:hover:not(:disabled),
+.ls-play-btn:focus-visible:not(:disabled) {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  outline: none;
+}
+
+.ls-play-btn--disabled,
+.ls-play-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Responsive: mobile portrait ─────────────────────────────── */
+@media (max-width: 600px) {
+  .ls-header-title { font-size: 14px; }
+  .ls-info-bar { flex-direction: column; align-items: flex-start; gap: 6px; padding: 8px 12px; }
+  .ls-objective { font-size: 11px; }
+  .ls-play-btn { width: 100%; text-align: center; }
+}
+
+/* ── Responsive: landscape mobile ────────────────────────────── */
+@media (max-height: 500px) {
+  .ls-header { padding: 5px 12px; min-height: 38px; }
+  .ls-info-bar { padding: 5px 12px; min-height: 36px; }
+}
