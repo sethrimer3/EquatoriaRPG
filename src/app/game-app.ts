@@ -37,6 +37,8 @@ import { createRpgRender } from '../render/rpg/rpg-render';
 import { createRpgMenuPanel } from '../ui/panels/rpg-menu-panel';
 import { addMotes } from '../sim/resources/resource-state';
 import { createMainMenu } from '../ui/main-menu';
+import { createWorldMapScreen } from '../ui/world-map/WorldMapScreen';
+import { createWorldMapProgressionState } from '../systems/worldMapProgression';
 
 import type { AppState, UIPanels } from './app-types';
 import { handleAction as handleActionImpl } from './app-actions';
@@ -196,6 +198,24 @@ export async function startApp(): Promise<void> {
     }
   });
   rpgRender.menuButtonContainer.appendChild(menuToggleBtn);
+
+  // ── World map progression + screen ──
+  const worldMapProgression = createWorldMapProgressionState(settings.isDevMode);
+  const worldMapScreen = createWorldMapScreen(
+    () => { worldMapScreen.hide(); },
+    worldMapProgression,
+  );
+  root.appendChild(worldMapScreen.element);
+
+  // ── Map button (shown next to ⚔ Menu button in RPG view) ──
+  const mapBtn = document.createElement('button');
+  mapBtn.className = 'rpg-menu-btn';
+  mapBtn.textContent = '🗺 Map';
+  mapBtn.setAttribute('aria-label', 'Open world map');
+  mapBtn.addEventListener('click', () => {
+    worldMapScreen.show();
+  });
+  rpgRender.menuButtonContainer.appendChild(mapBtn);
 
   const uiPanels: UIPanels = {
     mainCanvasContainer: canvasContainer,

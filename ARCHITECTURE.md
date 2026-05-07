@@ -206,3 +206,28 @@ Tier-to-gem mapping is defined in `src/render/assets/asset-paths.ts`.
 - Responsive layout with mobile-first CSS, landscape media queries
 - Generator positions are recomputed on every resize event
 
+
+## World Map System
+
+The world map is a full-screen overlay that provides navigation to all 11 game worlds and their levels.
+
+### Components
+- **Types** (`src/types/worldMapTypes.ts`) — All world map interfaces: `WorldData`, `MandatoryLevel`, `Base6Level`, `WorldMapProgressionState`, lock/unlock state unions
+- **Data** (`src/data/worldMapData.ts`) — Static `WORLD_MAP_DATA: WorldData[]` with all 11 worlds, normalized map positions, unlock chains, level definitions
+- **Progression** (`src/systems/worldMapProgression.ts`) — Mutable progression state (which worlds/levels are unlocked/current/completed), serialization helpers
+- **UI** (`src/ui/world-map/WorldMapScreen.ts`) — DOM overlay: canvas spiral map + detail panel; `createWorldMapScreen(onClose, state): WorldMapScreen`
+- **Styles** (`src/styles/world-map.css`) — `.wm-screen`, `.wm-header`, `.wm-body`, `.wm-canvas-area`, `.wm-detail-panel`, level item states
+
+### Runtime Flow
+1. `game-app.ts` creates `worldMapProgression = createWorldMapProgressionState(settings.isDevMode)`
+2. `worldMapScreen = createWorldMapScreen(onClose, worldMapProgression)` is appended to `#app`
+3. `🗺 Map` button in the RPG view calls `worldMapScreen.show()`
+4. Canvas renders 11 world nodes as colored circles connected by curved paths
+5. Clicking a node populates the detail panel with level list and Start button
+6. `startWorldLevel()` / `startOptionalChallenge()` are placeholders for future level launch integration
+7. `markLevelComplete()` advances unlock state and propagates world unlocks
+
+### State Ownership
+- `WorldMapProgressionState` is owned by `game-app.ts` (session-only until save integration)
+- Visual canvas state (selected node, node positions) is local to `WorldMapScreen.ts`
+- Canvas redraws on click interaction and resize only (no per-frame loop)
