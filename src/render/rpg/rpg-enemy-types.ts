@@ -14,6 +14,8 @@
  * remain in rpg-types.ts alongside player and weapon-system types.
  */
 
+import type { MathObjective } from '../../sim/rpg/math-objective-types';
+
 // ── Emerald enemy (blink-striker) ─────────────────────────────
 
 export type EmeraldPhase = 'patrol' | 'charging' | 'blinking' | 'cooldown';
@@ -30,6 +32,7 @@ export interface EmeraldEnemy {
   /** Origin of the last blink — fades as a ghost afterimage. */
   ghostX: number; ghostY: number; ghostAlpha: number;
   hasHitPlayer: boolean;
+  mathObjective?: MathObjective;
 }
 
 // ── Amber enemy (fan-gunner) ───────────────────────────────────
@@ -42,6 +45,7 @@ export interface AmberEnemy {
   atk: number; def: number;
   missileTimerMs: number;
   patrolTimerMs: number;
+  mathObjective?: MathObjective;
 }
 
 /** Amber shard — homing projectile fired in a fan spread by amber enemies. */
@@ -65,6 +69,7 @@ export interface VoidEnemy {
   atk: number; def: number;
   contactCdMs: number;   // ms until next contact damage tick
   pulseMs: number;       // accumulator for aura pulse animation
+  mathObjective?: MathObjective;
 }
 
 // ── Quartz enemy (crystal orbiter) ────────────────────────────
@@ -78,6 +83,7 @@ export interface QuartzEnemy {
   spikeTimerMs: number;
   strafeDirFlipMs: number;
   strafeDir: 1 | -1;
+  mathObjective?: MathObjective;
 }
 
 export interface QuartzSpike {
@@ -100,6 +106,7 @@ export interface RubyEnemy {
   boltTimerMs: number;
   patrolTimerMs: number;
   consecutiveShots: number;
+  mathObjective?: MathObjective;
 }
 
 export interface RubyBolt {
@@ -121,6 +128,7 @@ export interface SunstoneEnemy {
   atk: number; def: number;
   pulseTimerMs: number;
   orbitAngle: number;
+  mathObjective?: MathObjective;
 }
 
 // ── Citrine enemy (fast patrol + homing bolts) ─────────────────
@@ -133,6 +141,7 @@ export interface CitrineEnemy {
   atk: number; def: number;
   boltTimerMs: number;
   patrolTimerMs: number;
+  mathObjective?: MathObjective;
 }
 
 export interface CitrineBolt {
@@ -155,6 +164,7 @@ export interface IoliteEnemy {
   atk: number; def: number;
   beamTimerMs: number;
   patrolTimerMs: number;
+  mathObjective?: MathObjective;
 }
 
 // ── Amethyst enemy (crystal-shielder ring-burst) ──────────────
@@ -168,6 +178,7 @@ export interface AmethystEnemy {
   shieldHp: number; maxShieldHp: number;
   burstTimerMs: number;
   patrolTimerMs: number;
+  mathObjective?: MathObjective;
 }
 
 export interface AmethystShard {
@@ -191,6 +202,7 @@ export interface DiamondEnemy {
   phaseTimerMs: number;
   shardTimerMs: number;
   orbitAngle: number;
+  mathObjective?: MathObjective;
 }
 
 export interface DiamondShard {
@@ -216,6 +228,7 @@ export interface NullstoneEnemy {
   tendrilTimerMs: number;
   patrolTimerMs: number;
   pulseMs: number;
+  mathObjective?: MathObjective;
 }
 
 export interface VoidTendril {
@@ -252,6 +265,7 @@ export interface BossEnemy {
   danmakuLevel: number;
   /** Set when the boss is hit; cleared once the player is teleported back to safe zone. */
   isFiringPaused: boolean;
+  mathObjective?: MathObjective;
 }
 
 export interface BossProjectile {
@@ -279,6 +293,7 @@ export interface FracterylEnemy {
   patrolTimerMs: number;
   orbitAngle: number;
   pulseMs: number;
+  mathObjective?: MathObjective;
 }
 
 export interface FracterylShard {
@@ -305,6 +320,7 @@ export interface EigensteinEnemy {
   isChargingBeam: boolean;
   patrolTimerMs: number;
   pulseMs: number;
+  mathObjective?: MathObjective;
 }
 
 export interface EigensteinBeam {

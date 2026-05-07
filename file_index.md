@@ -500,6 +500,8 @@
 ### src/render/rpg/rpg-damage.ts
 - 24 per-entity damage functions extracted from `rpg-render.ts` via factory pattern (~307 lines).
 - Exports `DamageCtx` interface (`recordDps` callback) and `createDamageFns(ctx)` factory.
+- Exports `MathObjectiveEnemy` interface (`{ hp: number; mathObjective?: MathObjective }`) and `maybeApplyMathObjectiveDamage(enemy, effectiveDmg)` standalone helper.
+- `maybeApplyMathObjectiveDamage` returns `null` (no objective), `0` (rejected), or `effectiveDmg` (accepted); integrated into all 15 body-enemy damage functions.
 - `createDamageFns` returns all damage helpers (`damageEnemy`, `damageSapphireEnemy`, `damageMissile`, etc.) with identical signatures and behaviour, so call sites in `rpg-render.ts` are unchanged.
 - `damageBossEnemy` is NOT included; it lives in `rpg-boss-wave.ts` (part of boss wave lifecycle management).
 - Imports entity types from `./rpg-types` and `MINIMUM_SHIELD_DAMAGE` from `./rpg-constants`.
@@ -705,6 +707,27 @@
   `sapphire_spike`, `iolite_volley`, `amethyst_pierce`, `diamond_bastion`, `nullstone_nova`.
 - Sapphire and Amethyst definitions use persistent companion ship effects rather than the generic piercing effect.
 - `WEAPON_BY_ID` — O(1) lookup map.
+
+### src/sim/rpg/math-objective-types.ts
+- All type definitions for the math objective overlay system (~90 lines).
+- Exports: `MathObjective` interface, `MathObjectiveKind` discriminated union (11 kinds: exact, multipleOf, greaterThan, lessThan, evenOnly, oddOnly, primeOnly, digitSum, lastDigit, sequence, modulo), `MathObjectiveFeedback` interface, `HasMathObjective` interface, `formatMathCompact(n)`, `quantizeMathDamage(damage)`.
+- `MathObjective.progress` (0–1) tracks how close the objective is to completion; `MathObjective.feedback?` carries short-lived hit/miss display data.
+- Zero DOM/canvas/render dependencies.
+
+### src/sim/rpg/math-objectives.ts
+- Pure evaluation and mutation logic for math objectives (~220 lines).
+- Exports: `makeExactObjective`, `makeMultipleOfObjective`, `makeGreaterThanObjective`, `makeLessThanObjective`, `makeEvenOnlyObjective`, `makeOddOnlyObjective`, `makePrimeOnlyObjective`, `makeDigitSumObjective`, `makeLastDigitObjective`, `makeSequenceObjective`, `makeModuloObjective`.
+- Exports: `evaluateHit(obj, quantizedDmg)`, `applyAcceptedHit(obj)`, `applyRejectedHit(obj)`, `tickObjectiveFeedback(obj, deltaMs)`.
+- Constants: `MATH_FEEDBACK_DURATION_MS = 800`, `MATH_PULSE_DURATION_MS = 300`.
+- Re-exports `quantizeMathDamage` and `formatMathCompact` from `math-objective-types`.
+- Zero DOM/canvas/render dependencies.
+
+### src/render/rpg/rpg-math-objective-draw.ts
+- Canvas rendering for math objective overlays (~130 lines).
+- Exports: `drawMathObjective(ctx, obj, ex, ey, radius, deltaMs)`, `drawMathObjectivesForArray(ctx, enemies, radius, deltaMs)`, `getCachedTextWidth(ctx, text)`, `LABEL_CACHE_SIZE = 64`.
+- Draws a progress ring above each enemy that has a `mathObjective`, plus an accepted/rejected feedback flash.
+- LRU text-width cache avoids per-frame `measureText` calls.
+- Called from `rpg-render.ts` after each body-enemy draw call.
 
 ### src/sim/rpg/rpg-state.ts
 - `RpgSimState` interface — `highestWaveReached`, `purchasedWeaponIds` (Set), `equippedWeaponIds` (Set of all equipped weapon ids), `bossCompletions` (Map<bossId, bestSpeedPct>), `bossSpeedPct` (10–100).

@@ -25,10 +25,49 @@ import type {
   FracterylEnemy, FracterylShard,
   EigensteinEnemy,
 } from './rpg-enemy-types';
+import type { MathObjective } from '../../sim/rpg/math-objective-types';
+import {
+  evaluateHit,
+  applyAcceptedHit,
+  applyRejectedHit,
+  quantizeMathDamage,
+} from '../../sim/rpg/math-objectives';
 import { MINIMUM_SHIELD_DAMAGE } from './rpg-constants';
 
 export interface DamageCtx {
   recordDps(dmg: number, color?: string): void;
+}
+
+/** Minimal interface required by maybeApplyMathObjectiveDamage. */
+export interface MathObjectiveEnemy {
+  hp: number;
+  mathObjective?: MathObjective;
+}
+
+/**
+ * If the enemy has a math objective, route the effective post-DEF damage through
+ * the objective's evaluation instead of subtracting from HP normally.
+ *
+ * Returns:
+ *  - null  → no math objective present; caller should use normal HP subtraction
+ *  - 0     → objective rejected the hit (deflected); no HP damage, no DPS
+ *  - effectiveDmg → objective accepted; HP was set to 0 if solved; returns dmg for DPS
+ */
+export function maybeApplyMathObjectiveDamage(
+  enemy: MathObjectiveEnemy,
+  effectiveDmg: number,
+): number | null {
+  if (!enemy.mathObjective) return null;
+  const mathDmg = quantizeMathDamage(effectiveDmg);
+  const result = evaluateHit(enemy.mathObjective, mathDmg);
+  if (result.accepted) {
+    applyAcceptedHit(enemy.mathObjective, mathDmg, result);
+    if (enemy.mathObjective.solved) enemy.hp = 0;
+    return effectiveDmg;
+  } else {
+    applyRejectedHit(enemy.mathObjective, result);
+    return 0;
+  }
 }
 
 export function createDamageFns(ctx: DamageCtx) {
@@ -39,6 +78,11 @@ export function createDamageFns(ctx: DamageCtx) {
   function damageEnemy(enemy: LaserEnemy, rawDamage: number, defPierceRatio: number): number {
     const effectiveDef = enemy.def * (1 - defPierceRatio);
     const dmg = Math.max(0, rawDamage - effectiveDef);
+    const mathResult = maybeApplyMathObjectiveDamage(enemy, dmg);
+    if (mathResult !== null) {
+      if (mathResult > 0) recordDps(mathResult, '#d3f3ff');
+      return mathResult;
+    }
     if (dmg > 0) {
       enemy.hp -= dmg;
       recordDps(dmg, '#d3f3ff');
@@ -67,6 +111,11 @@ export function createDamageFns(ctx: DamageCtx) {
     // Hit the enemy body.
     const effectiveDef = enemy.def * (1 - defPierceRatio);
     const dmg = Math.max(0, rawDamage - effectiveDef);
+    const mathResult = maybeApplyMathObjectiveDamage(enemy, dmg);
+    if (mathResult !== null) {
+      if (mathResult > 0) recordDps(mathResult, '#6bd9ff');
+      return mathResult;
+    }
     if (dmg > 0) {
       enemy.hp -= dmg;
       recordDps(dmg, '#6bd9ff');
@@ -86,6 +135,11 @@ export function createDamageFns(ctx: DamageCtx) {
   function damageEmeraldEnemy(enemy: EmeraldEnemy, rawDamage: number, defPierceRatio: number): number {
     const effectiveDef = enemy.def * (1 - defPierceRatio);
     const dmg = Math.max(0, rawDamage - effectiveDef);
+    const mathResult = maybeApplyMathObjectiveDamage(enemy, dmg);
+    if (mathResult !== null) {
+      if (mathResult > 0) recordDps(mathResult, '#8fff8f');
+      return mathResult;
+    }
     if (dmg > 0) {
       enemy.hp -= dmg;
       recordDps(dmg, '#8fff8f');
@@ -97,6 +151,11 @@ export function createDamageFns(ctx: DamageCtx) {
   function damageAmberEnemy(enemy: AmberEnemy, rawDamage: number, defPierceRatio: number): number {
     const effectiveDef = enemy.def * (1 - defPierceRatio);
     const dmg = Math.max(0, rawDamage - effectiveDef);
+    const mathResult = maybeApplyMathObjectiveDamage(enemy, dmg);
+    if (mathResult !== null) {
+      if (mathResult > 0) recordDps(mathResult, '#ffb86c');
+      return mathResult;
+    }
     if (dmg > 0) {
       enemy.hp -= dmg;
       recordDps(dmg, '#ffb86c');
@@ -116,6 +175,11 @@ export function createDamageFns(ctx: DamageCtx) {
   function damageVoidEnemy(enemy: VoidEnemy, rawDamage: number, defPierceRatio: number): number {
     const effectiveDef = enemy.def * (1 - defPierceRatio);
     const dmg = Math.max(0, rawDamage - effectiveDef);
+    const mathResult = maybeApplyMathObjectiveDamage(enemy, dmg);
+    if (mathResult !== null) {
+      if (mathResult > 0) recordDps(mathResult, '#7b68ee');
+      return mathResult;
+    }
     if (dmg > 0) {
       enemy.hp -= dmg;
       recordDps(dmg, '#7b68ee');
@@ -126,6 +190,11 @@ export function createDamageFns(ctx: DamageCtx) {
   function damageQuartzEnemy(enemy: QuartzEnemy, rawDamage: number, defPierceRatio: number): number {
     const effectiveDef = enemy.def * (1 - defPierceRatio);
     const dmg = Math.max(0, rawDamage - effectiveDef);
+    const mathResult = maybeApplyMathObjectiveDamage(enemy, dmg);
+    if (mathResult !== null) {
+      if (mathResult > 0) recordDps(mathResult, '#e0e0e0');
+      return mathResult;
+    }
     if (dmg > 0) {
       enemy.hp -= dmg;
       recordDps(dmg, '#e0e0e0');
@@ -143,6 +212,11 @@ export function createDamageFns(ctx: DamageCtx) {
   function damageRubyEnemy(enemy: RubyEnemy, rawDamage: number, defPierceRatio: number): number {
     const effectiveDef = enemy.def * (1 - defPierceRatio);
     const dmg = Math.max(0, rawDamage - effectiveDef);
+    const mathResult = maybeApplyMathObjectiveDamage(enemy, dmg);
+    if (mathResult !== null) {
+      if (mathResult > 0) recordDps(mathResult, '#ff6b6b');
+      return mathResult;
+    }
     if (dmg > 0) {
       enemy.hp -= dmg;
       recordDps(dmg, '#ff6b6b');
@@ -160,6 +234,11 @@ export function createDamageFns(ctx: DamageCtx) {
   function damageSunstoneEnemy(enemy: SunstoneEnemy, rawDamage: number, defPierceRatio: number): number {
     const effectiveDef = enemy.def * (1 - defPierceRatio);
     const dmg = Math.max(0, rawDamage - effectiveDef);
+    const mathResult = maybeApplyMathObjectiveDamage(enemy, dmg);
+    if (mathResult !== null) {
+      if (mathResult > 0) recordDps(mathResult, '#ffd700');
+      return mathResult;
+    }
     if (dmg > 0) {
       enemy.hp -= dmg;
       recordDps(dmg, '#ffd700');
@@ -170,6 +249,11 @@ export function createDamageFns(ctx: DamageCtx) {
   function damageCitrineEnemy(enemy: CitrineEnemy, rawDamage: number, defPierceRatio: number): number {
     const effectiveDef = enemy.def * (1 - defPierceRatio);
     const dmg = Math.max(0, rawDamage - effectiveDef);
+    const mathResult = maybeApplyMathObjectiveDamage(enemy, dmg);
+    if (mathResult !== null) {
+      if (mathResult > 0) recordDps(mathResult, '#fff176');
+      return mathResult;
+    }
     if (dmg > 0) {
       enemy.hp -= dmg;
       recordDps(dmg, '#fff176');
@@ -187,6 +271,11 @@ export function createDamageFns(ctx: DamageCtx) {
   function damageIoliteEnemy(enemy: IoliteEnemy, rawDamage: number, defPierceRatio: number): number {
     const effectiveDef = enemy.def * (1 - defPierceRatio);
     const dmg = Math.max(0, rawDamage - effectiveDef);
+    const mathResult = maybeApplyMathObjectiveDamage(enemy, dmg);
+    if (mathResult !== null) {
+      if (mathResult > 0) recordDps(mathResult, '#9b59b6');
+      return mathResult;
+    }
     if (dmg > 0) {
       enemy.hp -= dmg;
       recordDps(dmg, '#9b59b6');
@@ -203,6 +292,11 @@ export function createDamageFns(ctx: DamageCtx) {
     }
     const effectiveDef = enemy.def * (1 - defPierceRatio);
     const dmg = Math.max(0, rawDamage - effectiveDef);
+    const mathResult = maybeApplyMathObjectiveDamage(enemy, dmg);
+    if (mathResult !== null) {
+      if (mathResult > 0) recordDps(mathResult, '#b388ff');
+      return mathResult;
+    }
     if (dmg > 0) {
       enemy.hp -= dmg;
       recordDps(dmg, '#b388ff');
@@ -221,6 +315,11 @@ export function createDamageFns(ctx: DamageCtx) {
     if (enemy.phaseInvuln) return 0;
     const effectiveDef = enemy.def * (1 - defPierceRatio);
     const dmg = Math.max(0, rawDamage - effectiveDef);
+    const mathResult = maybeApplyMathObjectiveDamage(enemy, dmg);
+    if (mathResult !== null) {
+      if (mathResult > 0) recordDps(mathResult, '#e0e0ff');
+      return mathResult;
+    }
     if (dmg > 0) {
       enemy.hp -= dmg;
       recordDps(dmg, '#e0e0ff');
@@ -239,6 +338,11 @@ export function createDamageFns(ctx: DamageCtx) {
     if (enemy.isAbsorbing) return 0;
     const effectiveDef = enemy.def * (1 - defPierceRatio);
     const dmg = Math.max(0, rawDamage - effectiveDef);
+    const mathResult = maybeApplyMathObjectiveDamage(enemy, dmg);
+    if (mathResult !== null) {
+      if (mathResult > 0) recordDps(mathResult, '#2c2c2c');
+      return mathResult;
+    }
     if (dmg > 0) {
       enemy.hp -= dmg;
       recordDps(dmg, '#2c2c2c');
@@ -256,6 +360,11 @@ export function createDamageFns(ctx: DamageCtx) {
   function damageFracterylEnemy(enemy: FracterylEnemy, rawDamage: number, defPierceRatio: number): number {
     const effectiveDef = enemy.def * (1 - defPierceRatio);
     const dmg = Math.max(0, rawDamage - effectiveDef);
+    const mathResult = maybeApplyMathObjectiveDamage(enemy, dmg);
+    if (mathResult !== null) {
+      if (mathResult > 0) recordDps(mathResult, '#ff69b4');
+      return mathResult;
+    }
     if (dmg > 0) {
       enemy.hp -= dmg;
       recordDps(dmg, '#ff69b4');
@@ -273,6 +382,11 @@ export function createDamageFns(ctx: DamageCtx) {
   function damageEigensteinEnemy(enemy: EigensteinEnemy, rawDamage: number, defPierceRatio: number): number {
     const effectiveDef = enemy.def * (1 - defPierceRatio);
     const dmg = Math.max(0, rawDamage - effectiveDef);
+    const mathResult = maybeApplyMathObjectiveDamage(enemy, dmg);
+    if (mathResult !== null) {
+      if (mathResult > 0) recordDps(mathResult, '#00ffff');
+      return mathResult;
+    }
     if (dmg > 0) {
       enemy.hp -= dmg;
       recordDps(dmg, '#00ffff');
