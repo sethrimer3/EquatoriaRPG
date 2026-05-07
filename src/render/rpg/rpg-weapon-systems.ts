@@ -42,6 +42,7 @@ import type {
   SunstoneMine,
   SapphireShip, SapphireLaser,
   AmethystShip, AmethystLaser,
+  AlivenSwarmEnemy,
 } from './rpg-enemy-types';
 import type { ClosestTarget } from './rpg-types';
 import { createShipWeaponSystems } from './rpg-weapon-ships';
@@ -96,6 +97,7 @@ export interface RpgWeaponCtx {
   fracterylEnemies: FracterylEnemy[];
   fracterylShards: FracterylShard[];
   eigensteinEnemies: EigensteinEnemy[];
+  alivenedEnemies: AlivenSwarmEnemy[];
 
   // Hit effects array (weapon functions push directly into this array)
   hitEffects: HitEffect[];
@@ -125,6 +127,7 @@ export interface RpgWeaponCtx {
   damageFracterylEnemy: (enemy: FracterylEnemy, dmg: number, armorMult: number) => number;
   damageFracterylShard: (shard: FracterylShard, dmg: number) => number;
   damageEigensteinEnemy: (enemy: EigensteinEnemy, dmg: number, armorMult: number) => number;
+  damageAlivenSwarmEnemy: (swarm: AlivenSwarmEnemy, dmg: number, armorMult: number) => number;
   damageBossEnemy: (rawDamage: number, defPierceRatio: number, fromDiamondBlade?: boolean) => number;
 
   // Generic multi-type targeting and damage

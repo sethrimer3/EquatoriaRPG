@@ -17,7 +17,7 @@ import type {
   RubyEnemy, SunstoneEnemy, CitrineEnemy,
   IoliteEnemy, AmethystEnemy, DiamondEnemy,
   NullstoneEnemy, FracterylEnemy, EigensteinEnemy,
-  BossEnemy,
+  BossEnemy, AlivenSwarmEnemy,
 } from './rpg-enemy-types';
 import {
   ORBIT_PROJ_SPEED_RAD, ORBIT_PROJ_RADIUS, ORBIT_PROJ_TRAIL_CAP,
@@ -52,6 +52,7 @@ export interface OrbitProjectileCtx {
   nullstoneEnemies: NullstoneEnemy[];
   fracterylEnemies: FracterylEnemy[];
   eigensteinEnemies: EigensteinEnemy[];
+  alivenedEnemies: AlivenSwarmEnemy[];
 
   /** Hit-flash effect list (pushed to on each hit). */
   hitEffects: HitEffect[];
@@ -74,6 +75,7 @@ export interface OrbitProjectileCtx {
   damageNullstoneEnemy(enemy: NullstoneEnemy, dmg: number, armorMult: number): number;
   damageFracterylEnemy(enemy: FracterylEnemy, dmg: number, armorMult: number): number;
   damageEigensteinEnemy(enemy: EigensteinEnemy, dmg: number, armorMult: number): number;
+  damageAlivenSwarmEnemy(swarm: AlivenSwarmEnemy, dmg: number, armorMult: number): number;
   damageBossEnemy(rawDamage: number, defPierceRatio: number): number;
 
   /** Spawns a floating damage number at (x, y) travelling in (vx, vy). */
@@ -284,6 +286,24 @@ export function updateOrbitProjectile(
     tryHit(op, enemy, enemy.x, enemy.y,
       () => ctx.damageEigensteinEnemy(enemy, ORBIT_PROJ_DAMAGE, 0),
       enemy.maxHp);
+  }
+
+  // ── Alivened swarm enemies ──────────────────────────────────────
+  // Hit is against the nearest living particle (nearest to the orbit position).
+  for (const swarm of ctx.alivenedEnemies) {
+    if (swarm.particles.length === 0) continue;
+    // Find the particle nearest the orbit projectile
+    let bestDistSq = Infinity, bestIdx = 0;
+    for (let i = 0; i < swarm.particles.length; i++) {
+      const p = swarm.particles[i];
+      const pdx = op.x - p.x, pdy = op.y - p.y;
+      const d = pdx * pdx + pdy * pdy;
+      if (d < bestDistSq) { bestDistSq = d; bestIdx = i; }
+    }
+    const nearestP = swarm.particles[bestIdx];
+    tryHit(op, nearestP, nearestP.x, nearestP.y,
+      () => ctx.damageAlivenSwarmEnemy(swarm, ORBIT_PROJ_DAMAGE, 0),
+      swarm.maxHp);
   }
 
   // ── Boss ────────────────────────────────────────────────────────

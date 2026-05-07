@@ -18,7 +18,7 @@ import type {
   RubyEnemy, SunstoneEnemy, CitrineEnemy,
   IoliteEnemy, AmethystEnemy, DiamondEnemy,
   NullstoneEnemy, FracterylEnemy, EigensteinEnemy,
-  BossEnemy,
+  BossEnemy, AlivenSwarmEnemy,
 } from './rpg-enemy-types';
 import {
   LASER_ENEMY_SIZE, SAPPHIRE_ENEMY_SIZE,
@@ -39,6 +39,7 @@ import {
   makeNullstoneEnemy,
   makeFracterylEnemy,
   makeEigensteinEnemy, makeBossEnemy,
+  makeAlivenSwarmEnemy,
 } from './rpg-factories';
 
 // ── Dependency-injection context ──────────────────────────────────────────────
@@ -71,6 +72,7 @@ export interface EnemySpawnCtx {
   nullstoneEnemies: NullstoneEnemy[];
   fracterylEnemies: FracterylEnemy[];
   eigensteinEnemies: EigensteinEnemy[];
+  alivenedEnemies: AlivenSwarmEnemy[];
 }
 
 // ── Spawn helper ──────────────────────────────────────────────────────────────
@@ -237,6 +239,16 @@ export function spawnEnemyById(ctx: EnemySpawnCtx, enemyTypeId: string): void {
       attempts++;
     } while (attempts < 20);
     ctx.eigensteinEnemies.push(makeEigensteinEnemy(spawnX, spawnY, wn));
+  } else if (enemyTypeId === 'alivened') {
+    // Spawn the swarm centroid at a random position far enough from the player.
+    do {
+      spawnX = 16 + Math.random() * (widthPx  - 32);
+      spawnY = 16 + Math.random() * (heightPx - 32);
+      const dx = spawnX - mote.x; const dy = spawnY - mote.y;
+      if (dx * dx + dy * dy >= minDist * minDist) break;
+      attempts++;
+    } while (attempts < 20);
+    ctx.alivenedEnemies.push(makeAlivenSwarmEnemy(spawnX, spawnY, wn));
   } else if (enemyTypeId === 'boss') {
     ctx.setBossEnemy(makeBossEnemy(Math.ceil(wn / 100), wn, widthPx, heightPx));
     ctx.enterBossWave();

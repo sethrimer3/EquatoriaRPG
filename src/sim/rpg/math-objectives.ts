@@ -15,6 +15,8 @@ export { quantizeMathDamage, formatMathCompact };
 
 export const MATH_FEEDBACK_DURATION_MS = 1400;
 export const MATH_PULSE_DURATION_MS = 300;
+/** Duration in ms for the expanding gold ring "SOLVED!" burst animation. */
+export const MATH_SOLVED_FLASH_MS = 700;
 
 // ── Objective construction helpers ────────────────────────────────
 
@@ -449,6 +451,7 @@ export function applyAcceptedHit(obj: MathObjective, mathDmg: number, result: Ev
   if (result.nowSolved) {
     obj.progress = 1;
     obj.solved = true;
+    obj.solvedFlashMs = MATH_SOLVED_FLASH_MS;
   }
 
   obj.feedback = {
@@ -481,5 +484,8 @@ export function tickObjectiveFeedback(obj: MathObjective, deltaMs: number): void
     if (obj.feedback.timerMs <= 0) {
       obj.feedback = undefined;
     }
+  }
+  if (obj.solvedFlashMs !== undefined && obj.solvedFlashMs > 0) {
+    obj.solvedFlashMs = Math.max(0, obj.solvedFlashMs - deltaMs);
   }
 }

@@ -18,7 +18,7 @@ import type {
   NullstoneEnemy, VoidTendril,
   FracterylEnemy, FracterylShard,
   EigensteinEnemy,
-  BossEnemy,
+  BossEnemy, AlivenSwarmEnemy,
 } from './rpg-enemy-types';
 
 export interface RpgTargetingCtx {
@@ -48,6 +48,7 @@ export interface RpgTargetingCtx {
   fracterylEnemies: FracterylEnemy[];
   fracterylShards: FracterylShard[];
   eigensteinEnemies: EigensteinEnemy[];
+  alivenedEnemies: AlivenSwarmEnemy[];
   damageEnemy: (e: LaserEnemy, raw: number, pierce: number) => number;
   damageSapphireEnemy: (e: SapphireEnemy, raw: number, pierce: number, bypass: boolean) => number;
   damageMissile: (m: SapphireMissile, raw: number, pierce: number) => number;
@@ -72,6 +73,7 @@ export interface RpgTargetingCtx {
   damageFracterylEnemy: (e: FracterylEnemy, raw: number, pierce: number) => number;
   damageFracterylShard: (s: FracterylShard, raw: number, pierce: number) => number;
   damageEigensteinEnemy: (e: EigensteinEnemy, raw: number, pierce: number) => number;
+  damageAlivenSwarmEnemy: (e: AlivenSwarmEnemy, raw: number, pierce: number) => number;
   damageBossEnemy: (raw: number, pierce: number, fromDiamond?: boolean) => number;
 }
 
@@ -79,7 +81,7 @@ export interface RpgTargetingHandle {
   findClosestTarget(rangeSq: number): ClosestTarget | null;
   findClosestEnemy(rangeSq: number): LaserEnemy | SapphireEnemy | EmeraldEnemy | AmberEnemy | VoidEnemy
     | QuartzEnemy | RubyEnemy | SunstoneEnemy | CitrineEnemy | IoliteEnemy | AmethystEnemy | DiamondEnemy
-    | NullstoneEnemy | FracterylEnemy | EigensteinEnemy | BossEnemy | null;
+    | NullstoneEnemy | FracterylEnemy | EigensteinEnemy | AlivenSwarmEnemy | BossEnemy | null;
   collectEnemyBodyTargets(): ClosestTarget[];
   findClosestEnemyFrom(x: number, y: number, rangeSq: number): ClosestTarget | null;
   getTargetedEnemy(): ClosestTarget | null;
@@ -215,6 +217,15 @@ export function createRpgTargeting(ctx: RpgTargetingCtx): RpgTargetingHandle {
       const d = dx * dx + dy * dy;
       if (d <= bestSq) { bestSq = d; best = { kind: 'eigenstein', x: e.x, y: e.y, distSq: d, eigenstein: e }; }
     }
+    // For alivened swarms, target the nearest living particle position (routes hits there)
+    for (const swarm of ctx.alivenedEnemies) {
+      if (swarm.particles.length === 0) continue;
+      const idx = Math.min(swarm.nearestParticleIdx, swarm.particles.length - 1);
+      const np = swarm.particles[idx];
+      const dx = np.x - ctx.mote.x, dy = np.y - ctx.mote.y;
+      const d = dx * dx + dy * dy;
+      if (d <= bestSq) { bestSq = d; best = { kind: 'alivened', x: np.x, y: np.y, distSq: d, alivened: swarm }; }
+    }
     if (ctx.bossEnemy) {
       const dx = ctx.bossEnemy.x - ctx.mote.x, dy = ctx.bossEnemy.y - ctx.mote.y;
       const d = dx * dx + dy * dy;
@@ -225,11 +236,11 @@ export function createRpgTargeting(ctx: RpgTargetingCtx): RpgTargetingHandle {
 
   function findClosestEnemy(rangeSq: number): LaserEnemy | SapphireEnemy | EmeraldEnemy | AmberEnemy | VoidEnemy
     | QuartzEnemy | RubyEnemy | SunstoneEnemy | CitrineEnemy | IoliteEnemy | AmethystEnemy | DiamondEnemy | NullstoneEnemy
-    | FracterylEnemy | EigensteinEnemy | BossEnemy | null {
+    | FracterylEnemy | EigensteinEnemy | AlivenSwarmEnemy | BossEnemy | null {
     let bestSq = rangeSq;
     let best: LaserEnemy | SapphireEnemy | EmeraldEnemy | AmberEnemy | VoidEnemy
       | QuartzEnemy | RubyEnemy | SunstoneEnemy | CitrineEnemy | IoliteEnemy | AmethystEnemy | DiamondEnemy | NullstoneEnemy
-      | FracterylEnemy | EigensteinEnemy | BossEnemy | null = null;
+      | FracterylEnemy | EigensteinEnemy | AlivenSwarmEnemy | BossEnemy | null = null;
     for (const e of ctx.enemies) {
       const dx = e.x - ctx.mote.x, dy = e.y - ctx.mote.y;
       const d = dx * dx + dy * dy;
@@ -305,6 +316,12 @@ export function createRpgTargeting(ctx: RpgTargetingCtx): RpgTargetingHandle {
       const d = dx * dx + dy * dy;
       if (d <= bestSq) { bestSq = d; best = e; }
     }
+    for (const swarm of ctx.alivenedEnemies) {
+      if (swarm.particles.length === 0) continue;
+      const dx = swarm.x - ctx.mote.x, dy = swarm.y - ctx.mote.y;
+      const d = dx * dx + dy * dy;
+      if (d <= bestSq) { bestSq = d; best = swarm; }
+    }
     if (ctx.bossEnemy) {
       const dx = ctx.bossEnemy.x - ctx.mote.x, dy = ctx.bossEnemy.y - ctx.mote.y;
       const d = dx * dx + dy * dy;
@@ -342,6 +359,7 @@ export function createRpgTargeting(ctx: RpgTargetingCtx): RpgTargetingHandle {
         ctx.nullstoneEnemies.includes(targetedEnemy as NullstoneEnemy) ||
         ctx.fracterylEnemies.includes(targetedEnemy as FracterylEnemy) ||
         ctx.eigensteinEnemies.includes(targetedEnemy as EigensteinEnemy) ||
+        ctx.alivenedEnemies.includes(targetedEnemy as AlivenSwarmEnemy) ||
         (ctx.bossEnemy === targetedEnemy);
 
       if (!isAlive) {
@@ -397,6 +415,13 @@ export function createRpgTargeting(ctx: RpgTargetingCtx): RpgTargetingHandle {
         if (ctx.eigensteinEnemies.includes(targetedEnemy as EigensteinEnemy)) {
           return { kind: 'eigenstein', x: e.x, y: e.y, distSq, eigenstein: targetedEnemy as EigensteinEnemy };
         }
+        if (ctx.alivenedEnemies.includes(targetedEnemy as AlivenSwarmEnemy)) {
+          const swarm = targetedEnemy as AlivenSwarmEnemy;
+          const idx = Math.min(swarm.nearestParticleIdx, swarm.particles.length - 1);
+          const np = swarm.particles.length > 0 ? swarm.particles[idx] : { x: swarm.x, y: swarm.y };
+          const adx = np.x - ctx.mote.x, ady = np.y - ctx.mote.y;
+          return { kind: 'alivened', x: np.x, y: np.y, distSq: adx * adx + ady * ady, alivened: swarm };
+        }
         if (ctx.bossEnemy === targetedEnemy) {
           return { kind: 'boss', x: e.x, y: e.y, distSq, boss: ctx.bossEnemy };
         }
@@ -432,6 +457,12 @@ export function createRpgTargeting(ctx: RpgTargetingCtx): RpgTargetingHandle {
     for (const e of ctx.nullstoneEnemies) addTarget('nullstone', e, 'nullstone');
     for (const e of ctx.fracterylEnemies) addTarget('fracteryl', e, 'fracteryl');
     for (const e of ctx.eigensteinEnemies) addTarget('eigenstein', e, 'eigenstein');
+    // Alivened swarms: each swarm is one body target at its centroid
+    for (const swarm of ctx.alivenedEnemies) {
+      if (swarm.particles.length === 0) continue;
+      const dx = swarm.x - ctx.mote.x, dy = swarm.y - ctx.mote.y;
+      targets.push({ kind: 'alivened', x: swarm.x, y: swarm.y, distSq: dx * dx + dy * dy, alivened: swarm });
+    }
     if (ctx.bossEnemy) addTarget('boss', ctx.bossEnemy, 'boss');
     return targets;
   }
@@ -466,6 +497,7 @@ export function createRpgTargeting(ctx: RpgTargetingCtx): RpgTargetingHandle {
     if (target.nullstone) return ctx.damageNullstoneEnemy(target.nullstone, rawDamage, defPierceRatio);
     if (target.fracteryl) return ctx.damageFracterylEnemy(target.fracteryl, rawDamage, defPierceRatio);
     if (target.eigenstein) return ctx.damageEigensteinEnemy(target.eigenstein, rawDamage, defPierceRatio);
+    if (target.alivened) return ctx.damageAlivenSwarmEnemy(target.alivened, rawDamage, defPierceRatio);
     if (target.boss) return ctx.damageBossEnemy(rawDamage, defPierceRatio);
     return 0;
   }

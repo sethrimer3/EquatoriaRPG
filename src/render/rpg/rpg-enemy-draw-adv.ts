@@ -4,7 +4,7 @@
  * Extracted from rpg-enemy-draw.ts to keep that file under ~300 lines.
  * Contains draw functions for all enemy types from Quartz onward:
  *   Quartz, Ruby, Sunstone, Citrine, Iolite, Amethyst, Diamond,
- *   Nullstone, Fracteryl, Eigenstein, and teleport particles.
+ *   Nullstone, Fracteryl, Eigenstein, AlivenSwarm, and teleport particles.
  *
  * Each function takes an explicit `ctx: CanvasRenderingContext2D` as its first
  * parameter plus the entity array(s) it needs — no closure captures.
@@ -22,6 +22,7 @@ import type {
   FracterylEnemy, FracterylShard,
   EigensteinEnemy, EigensteinBeam,
   TeleportParticle,
+  AlivenSwarmEnemy,
 } from './rpg-enemy-types';
 import {
   QUARTZ_ENEMY_SIZE, QUARTZ_ENEMY_GLOW, QUARTZ_ENEMY_COLOR,
@@ -40,6 +41,7 @@ import {
   VOID_TENDRIL_SIZE, VOID_TENDRIL_GLOW, VOID_TENDRIL_COLOR,
   FRACTERYL_ENEMY_SIZE, FRACTERYL_ENEMY_GLOW, FRACTERYL_ENEMY_COLOR,
   EIGENSTEIN_ENEMY_SIZE, EIGENSTEIN_ENEMY_GLOW, EIGENSTEIN_ENEMY_COLOR, EIGENSTEIN_BEAM_CHARGE_MS,
+  ALIVEN_PARTICLE_RADIUS,
 } from './rpg-enemy-constants';
 
 // ── Low-graphics mode flag ────────────────────────────────────
@@ -373,4 +375,89 @@ export function drawTeleportParticles(ctx: CanvasRenderingContext2D, particles: 
   }
   ctx.globalAlpha = 1; ctx.shadowBlur = 0;
   ctx.restore();
+}
+
+/**
+ * Draws all AlivenSwarmEnemy instances.
+ *
+ * Each living particle is drawn as a small glowing circle with a colour
+ * determined by its tierIndex. A dim connection line is drawn between each
+ * pair of particles within ALIVEN_INTERACTION_RADIUS to visualise the swarm
+ * bonds.
+ */
+export function drawAlivenSwarmEnemies(
+  ctx: CanvasRenderingContext2D,
+  swarms: AlivenSwarmEnemy[],
+  nowMs: number,
+): void {
+  if (swarms.length === 0) return;
+
+  for (const swarm of swarms) {
+    const particles = swarm.particles;
+    if (particles.length === 0) continue;
+
+    // ── Bond lines between interacting particles ─────────────
+    const bondR2 = ALIVEN_PARTICLE_RADIUS * ALIVEN_PARTICLE_RADIUS * 110; // ≈ 10× particle size
+    ctx.save();
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const pi = particles[i], pj = particles[j];
+        const dx = pj.x - pi.x, dy = pj.y - pi.y;
+        if (dx * dx + dy * dy > bondR2) continue;
+        // Colour bond by tier pair
+        const coeff = swarm.interactionMatrix[pi.tierIndex * 4 + pj.tierIndex];
+        const bondAlpha = Math.max(0.05, (coeff + 1) * 0.18);
+        ctx.globalAlpha = bondAlpha;
+        ctx.strokeStyle = coeff > 0 ? pi.glowColor : '#888';
+        ctx.beginPath();
+        ctx.moveTo(pi.x, pi.y);
+        ctx.lineTo(pj.x, pj.y);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+
+    // ── Individual particles ───────────────────────────────────
+    ctx.save();
+    for (const p of particles) {
+      const hpRatio = p.hp / p.maxHp;
+      ctx.globalAlpha = 0.55 + hpRatio * 0.45;
+      ctx.shadowBlur = isLowGraphicsMode ? 0 : ALIVEN_PARTICLE_RADIUS * 4;
+      ctx.shadowColor = p.glowColor;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, ALIVEN_PARTICLE_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Tiny HP bar below the particle
+      if (hpRatio < 1) {
+        ctx.shadowBlur = 0;
+        const barW = ALIVEN_PARTICLE_RADIUS * 3;
+        const barH = 1;
+        const barX = p.x - barW / 2;
+        const barY = p.y + ALIVEN_PARTICLE_RADIUS + 2;
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = '#222';
+        ctx.fillRect(barX, barY, barW, barH);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(barX, barY, barW * hpRatio, barH);
+      }
+    }
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+    ctx.restore();
+
+    // ── Swarm health bar above centroid ───────────────────────
+    if (swarm.particles.length > 0 && swarm.hp < swarm.maxHp) {
+      const pulse = 0.6 + 0.4 * Math.sin(nowMs * 0.003);
+      const barW = 28, barH = 2;
+      ctx.save();
+      ctx.globalAlpha = 0.75 * pulse;
+      ctx.fillStyle = '#111';
+      ctx.fillRect(swarm.x - barW / 2, swarm.y - 14, barW, barH);
+      ctx.fillStyle = '#cc88ff';
+      ctx.fillRect(swarm.x - barW / 2, swarm.y - 14, barW * (swarm.hp / swarm.maxHp), barH);
+      ctx.restore();
+    }
+  }
 }

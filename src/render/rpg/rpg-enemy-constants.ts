@@ -2,7 +2,8 @@
  * rpg-enemy-constants.ts — Per-enemy-type constants for all non-starter enemies.
  *
  * Covers: Emerald, Amber, Void, Quartz, Ruby, Sunstone, Citrine,
- *         Iolite, Amethyst, Diamond, Nullstone, Fracteryl, Eigenstein.
+ *         Iolite, Amethyst, Diamond, Nullstone, Fracteryl, Eigenstein,
+ *         AlivenSwarm.
  *
  * Extracted from rpg-constants.ts to keep that file under ~600 lines.
  * Starter enemies (Laser, Sapphire) remain in rpg-constants.ts.
@@ -264,3 +265,57 @@ export const EIGENSTEIN_BEAM_FIRE_MS     = 300;
 export const EIGENSTEIN_PATROL_TURN_MS   = 3000;
 export const EIGENSTEIN_ENEMY_COLOR      = '#44ccff';
 export const EIGENSTEIN_ENEMY_GLOW       = '#88eeff';
+
+// ── Alivened swarm enemy constants ────────────────────────────────
+
+/** Base HP per individual particle (scaled by wave). */
+export const ALIVEN_PARTICLE_HP_INIT    = 50;
+export const ALIVEN_PARTICLE_ATK_INIT   = 16;
+export const ALIVEN_DEF_INIT            = 6;
+/** Number of particles spawned per swarm. */
+export const ALIVEN_PARTICLE_COUNT      = 8;
+/** Visual radius of each particle in pixels. */
+export const ALIVEN_PARTICLE_RADIUS     = 3;
+/** Radius within which particles interact (px). */
+export const ALIVEN_INTERACTION_RADIUS  = 35;
+/** Hard minimum separation between particles (px). */
+export const ALIVEN_PROTECTED_RADIUS    = 7;
+/** Max force magnitude per frame for Particle Life forces. */
+export const ALIVEN_MAX_FORCE           = 2.5;
+/** Group cohesion force pulling each particle toward the swarm centroid. */
+export const ALIVEN_COHESION_STR        = 0.012;
+/** Group drift speed toward the player (px/ms). */
+export const ALIVEN_GROUP_DRIFT_SPEED   = 0.30;
+/** Velocity damping per frame. */
+export const ALIVEN_VELOCITY_DAMPING    = 0.90;
+/** Contact damage check radius (particle centre to player centre). */
+export const ALIVEN_CONTACT_RADIUS      = 6;
+/** Minimum ms between contact damage ticks per particle. */
+export const ALIVEN_CONTACT_CD_MS       = 800;
+/** XP multiplier relative to a laser kill. */
+export const ALIVEN_XP_MULT             = 8;
+/** Wave threshold at which alivened swarms first appear. Must match wave-definitions.ts. */
+export const ALIVEN_FIRST_WAVE          = 95;
+
+/**
+ * Flat [4×4] row-major interaction matrix for AlivenSwarm enemies.
+ * Entry [i*4+j] = attraction coefficient from type i toward type j.
+ * Positive = attract, negative = repel.
+ *
+ *   0 = Ruby-red, 1 = Sapphire-blue, 2 = Emerald-green, 3 = Void-purple
+ */
+export const ALIVEN_INTERACTION_MATRIX = new Float32Array([
+//  →0    →1    →2    →3
+  -0.2,  0.5, -0.3,  0.1,   // from 0 (Ruby)
+   0.5, -0.2,  0.4, -0.3,   // from 1 (Sapphire)
+  -0.3,  0.4, -0.2,  0.5,   // from 2 (Emerald)
+   0.1, -0.3,  0.5, -0.2,   // from 3 (Void)
+]);
+
+/** Color and glow for each of the 4 particle types. */
+export const ALIVEN_PARTICLE_COLORS: ReadonlyArray<readonly [string, string]> = [
+  ['#dc3232', '#ff6666'],   // 0 Ruby-red
+  ['#4488ff', '#88bbff'],   // 1 Sapphire-blue
+  ['#22dd66', '#66ffaa'],   // 2 Emerald-green
+  ['#9933ff', '#cc88ff'],   // 3 Void-purple
+] as const;
