@@ -194,6 +194,16 @@ export function serializeWorldMapState(state: WorldMapProgressionState): Record<
   return { version: 1, devMode: state.devMode, worlds };
 }
 
+const VALID_WORLD_IDS: ReadonlySet<string> = new Set<string>([
+  'origin_nexus', 'arithmetic_sands', 'fraction_fen', 'algebra_grove',
+  'geometry_peaks', 'coordinate_city', 'calculus_falls', 'probability_gardens',
+  'matrix_bastion', 'fractal_expanse', 'eigen_citadel',
+]);
+
+const VALID_UNLOCK_STATES: ReadonlySet<string> = new Set<string>([
+  'locked', 'unlocked', 'current', 'completed',
+]);
+
 /** Deserialize progression state from a save record. Falls back to default on errors. */
 export function deserializeWorldMapState(raw: Record<string, unknown>): WorldMapProgressionState {
   try {
@@ -204,16 +214,22 @@ export function deserializeWorldMapState(raw: Record<string, unknown>): WorldMap
     if (!Array.isArray(rawWorlds)) return defaults;
 
     for (const entry of rawWorlds as SerializedWorldProgress[]) {
+      if (typeof entry !== 'object' || entry === null) continue;
+      if (typeof entry.worldId !== 'string' || !VALID_WORLD_IDS.has(entry.worldId)) continue;
+      if (typeof entry.unlockState !== 'string' || !VALID_UNLOCK_STATES.has(entry.unlockState)) continue;
+
       const progress = defaults.worlds.get(entry.worldId as WorldId);
       if (!progress) continue;
-      progress.unlockState = (entry.unlockState ?? 'locked') as WorldUnlockState;
+      progress.unlockState = entry.unlockState as WorldUnlockState;
       progress.completedMandatoryLevelIds = new Set<string>(
-        Array.isArray(entry.completedMandatoryLevelIds) ? entry.completedMandatoryLevelIds : [],
+        Array.isArray(entry.completedMandatoryLevelIds) ? entry.completedMandatoryLevelIds.filter(v => typeof v === 'string') : [],
       );
       progress.completedBase6Ids = new Set<string>(
-        Array.isArray(entry.completedBase6Ids) ? entry.completedBase6Ids : [],
+        Array.isArray(entry.completedBase6Ids) ? entry.completedBase6Ids.filter(v => typeof v === 'string') : [],
       );
-      progress.currentMandatoryLevelId = entry.currentMandatoryLevelId ?? null;
+      progress.currentMandatoryLevelId = typeof entry.currentMandatoryLevelId === 'string'
+        ? entry.currentMandatoryLevelId
+        : null;
     }
 
     return defaults;

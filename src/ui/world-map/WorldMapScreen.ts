@@ -35,6 +35,7 @@ export interface WorldMapScreen {
   show(): void;
   hide(): void;
   refresh(state: WorldMapProgressionState): void;
+  destroy(): void;
 }
 
 // ─── Internal types ───────────────────────────────────────────────
@@ -390,20 +391,23 @@ export function createWorldMapScreen(
 
       // Click to start an unlocked/current level
       if (levelState === 'unlocked' || levelState === 'current') {
-        item.title = `Start: ${level.name}`;
-        item.addEventListener('click', () => {
-          startWorldLevel(selectedWorldId!, level.id);
-        });
-
-        // DEV: right-click marks complete for testing
-        if (state.devMode) {
-          item.title += ' (right-click → mark complete)';
-          item.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            markLevelComplete(state, selectedWorldId!, level.id);
-            drawMap();
-            renderDetailPanel();
+        const capturedWorldId = selectedWorldId;
+        if (capturedWorldId !== null) {
+          item.title = `Start: ${level.name}`;
+          item.addEventListener('click', () => {
+            startWorldLevel(capturedWorldId, level.id);
           });
+
+          // DEV: right-click marks complete for testing
+          if (state.devMode) {
+            item.title += ' (right-click → mark complete)';
+            item.addEventListener('contextmenu', (e) => {
+              e.preventDefault();
+              markLevelComplete(state, capturedWorldId, level.id);
+              drawMap();
+              renderDetailPanel();
+            });
+          }
         }
       }
 
@@ -470,9 +474,12 @@ export function createWorldMapScreen(
       item.title = unlocked ? challenge.challengeRule : 'Complete Level 5 to unlock Base 6 challenges.';
 
       if (itemState === 'unlocked') {
-        item.addEventListener('click', () => {
-          startOptionalChallenge(selectedWorldId!, challenge.id);
-        });
+        const capturedWorldId = selectedWorldId;
+        if (capturedWorldId !== null) {
+          item.addEventListener('click', () => {
+            startOptionalChallenge(capturedWorldId, challenge.id);
+          });
+        }
       }
 
       base6List.appendChild(item);
@@ -484,14 +491,15 @@ export function createWorldMapScreen(
     // ── Start current level button ──
     const worldProgress = state.worlds.get(selectedWorldId);
     const currentLevelId = worldProgress?.currentMandatoryLevelId;
-    if (currentLevelId) {
+    if (currentLevelId && selectedWorldId !== null) {
+      const capturedWorldId = selectedWorldId;
       const currentLevel = worldData.mandatoryLevels.find(l => l.id === currentLevelId);
       if (currentLevel) {
         const startBtn = document.createElement('button');
         startBtn.className = 'wm-start-btn';
         startBtn.textContent = `▶ Start: ${currentLevel.name}`;
         startBtn.addEventListener('click', () => {
-          startWorldLevel(selectedWorldId!, currentLevelId);
+          startWorldLevel(capturedWorldId, currentLevelId);
         });
         content.appendChild(startBtn);
       }
@@ -536,7 +544,21 @@ export function createWorldMapScreen(
   }
 
   canvas.addEventListener('click', onCanvasClick);
-  canvas.addEventListener('touchend', (e) => { e.preventDefault(); onCanvasClick(e); }, { passive: false });
+  canvas.addEventListener('touchend', (e) => {
+    // Only prevent default (blocking scroll) when a node was actually tapped
+    const touch = e.changedTouches[0];
+    if (touch) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const px = (touch.clientX - rect.left) * scaleX;
+      const py = (touch.clientY - rect.top) * scaleY;
+      if (getNodeAtPoint(px, py)) {
+        e.preventDefault();
+      }
+    }
+    onCanvasClick(e);
+  }, { passive: false });
 
   // Pointer cursor when hovering a node
   canvas.addEventListener('mousemove', (e: MouseEvent) => {
@@ -555,7 +577,8 @@ export function createWorldMapScreen(
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
-    ctx.scale(dpr, dpr);
+    // Reset the transform before applying DPR scale to avoid compounding on repeated calls
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
     buildNodes();
@@ -589,11 +612,16 @@ export function createWorldMapScreen(
     renderDetailPanel();
   }
 
+  function destroy(): void {
+    resizeObserver.disconnect();
+    cancelAnimationFrame(rafId);
+  }
+
   // Initial setup
   syncDevButton();
   renderDetailPanel();
 
-  return { element, show, hide, refresh };
+  return { element, show, hide, refresh, destroy };
 }
 
 // ─── Color utility helpers ────────────────────────────────────────
