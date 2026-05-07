@@ -194,11 +194,7 @@ export function serializeWorldMapState(state: WorldMapProgressionState): Record<
   return { version: 1, devMode: state.devMode, worlds };
 }
 
-const VALID_WORLD_IDS: ReadonlySet<string> = new Set<string>([
-  'origin_nexus', 'arithmetic_sands', 'fraction_fen', 'algebra_grove',
-  'geometry_peaks', 'coordinate_city', 'calculus_falls', 'probability_gardens',
-  'matrix_bastion', 'fractal_expanse', 'eigen_citadel',
-]);
+const VALID_WORLD_IDS: ReadonlySet<string> = new Set<string>(WORLD_MAP_DATA.map(w => w.id));
 
 const VALID_UNLOCK_STATES: ReadonlySet<string> = new Set<string>([
   'locked', 'unlocked', 'current', 'completed',

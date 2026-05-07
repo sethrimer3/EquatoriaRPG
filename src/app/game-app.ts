@@ -205,7 +205,6 @@ export async function startApp(): Promise<void> {
     () => { worldMapScreen.hide(); },
     worldMapProgression,
   );
-  worldMapScreen.element.style.display = 'none';
   root.appendChild(worldMapScreen.element);
 
   // ── Map button (shown next to ⚔ Menu button in RPG view) ──
@@ -214,7 +213,6 @@ export async function startApp(): Promise<void> {
   mapBtn.textContent = '🗺 Map';
   mapBtn.setAttribute('aria-label', 'Open world map');
   mapBtn.addEventListener('click', () => {
-    worldMapScreen.element.style.display = '';
     worldMapScreen.show();
   });
   rpgRender.menuButtonContainer.appendChild(mapBtn);

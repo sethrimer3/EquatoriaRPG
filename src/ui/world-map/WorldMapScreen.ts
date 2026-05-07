@@ -123,7 +123,9 @@ export function createWorldMapScreen(
 
   const canvas = document.createElement('canvas');
   canvasArea.appendChild(canvas);
-  const ctx = canvas.getContext('2d')!;
+  const ctxRaw = canvas.getContext('2d');
+  if (!ctxRaw) throw new Error('WorldMapScreen: failed to get 2D canvas context');
+  const ctx = ctxRaw;
 
   // ── Detail panel ──
   const detailPanel = document.createElement('div');
@@ -149,16 +151,20 @@ export function createWorldMapScreen(
     };
   }
 
+  /** Returns true if the last mandatory level of a world is a boss level. */
+  function hasBossLevel(mandatoryLevels: { type: string }[]): boolean {
+    return mandatoryLevels[mandatoryLevels.length - 1]?.type === 'boss';
+  }
+
   /** Rebuild the nodes array from WORLD_MAP_DATA positions. */
   function buildNodes(): void {
     nodes = WORLD_MAP_DATA.map(world => {
       const { cx, cy } = normToCanvas(world.position.x, world.position.y);
-      const isBoss = world.mandatoryLevels[world.mandatoryLevels.length - 1]?.type === 'boss';
       return {
         worldId: world.id,
         cx,
         cy,
-        radius: isBoss ? BOSS_NODE_RADIUS : NODE_RADIUS,
+        radius: hasBossLevel(world.mandatoryLevels) ? BOSS_NODE_RADIUS : NODE_RADIUS,
       };
     });
   }
@@ -213,7 +219,7 @@ export function createWorldMapScreen(
 
       const color = nodeColor(node.worldId);
       const isSelected = node.worldId === selectedWorldId;
-      const isBossWorld = worldData.mandatoryLevels[worldData.mandatoryLevels.length - 1]?.type === 'boss';
+      const isBossWorld = hasBossLevel(worldData.mandatoryLevels);
 
       // Glow for unlocked/current/completed
       const s = getWorldUnlockState(state, node.worldId);
@@ -517,8 +523,16 @@ export function createWorldMapScreen(
     return null;
   }
 
-  function onCanvasClick(e: MouseEvent | TouchEvent): void {
+  /** Convert a client-space point to canvas pixel coordinates. */
+  function clientToCanvas(clientX: number, clientY: number): { px: number; py: number } {
     const rect = canvas.getBoundingClientRect();
+    return {
+      px: (clientX - rect.left) * (canvas.width / rect.width),
+      py: (clientY - rect.top) * (canvas.height / rect.height),
+    };
+  }
+
+  function onCanvasClick(e: MouseEvent | TouchEvent): void {
     let clientX: number, clientY: number;
     if (e instanceof MouseEvent) {
       clientX = e.clientX;
@@ -530,11 +544,7 @@ export function createWorldMapScreen(
       clientY = touch.clientY;
     }
 
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const px = (clientX - rect.left) * scaleX;
-    const py = (clientY - rect.top) * scaleY;
-
+    const { px, py } = clientToCanvas(clientX, clientY);
     const node = getNodeAtPoint(px, py);
     if (node) {
       selectedWorldId = node.worldId;
@@ -548,11 +558,7 @@ export function createWorldMapScreen(
     // Only prevent default (blocking scroll) when a node was actually tapped
     const touch = e.changedTouches[0];
     if (touch) {
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      const px = (touch.clientX - rect.left) * scaleX;
-      const py = (touch.clientY - rect.top) * scaleY;
+      const { px, py } = clientToCanvas(touch.clientX, touch.clientY);
       if (getNodeAtPoint(px, py)) {
         e.preventDefault();
       }
@@ -562,11 +568,7 @@ export function createWorldMapScreen(
 
   // Pointer cursor when hovering a node
   canvas.addEventListener('mousemove', (e: MouseEvent) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const px = (e.clientX - rect.left) * scaleX;
-    const py = (e.clientY - rect.top) * scaleY;
+    const { px, py } = clientToCanvas(e.clientX, e.clientY);
     canvas.style.cursor = getNodeAtPoint(px, py) ? 'pointer' : 'default';
   });
 
@@ -577,7 +579,8 @@ export function createWorldMapScreen(
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
-    // Reset the transform before applying DPR scale to avoid compounding on repeated calls
+    // Reset the transform before applying DPR scale to avoid compounding on repeated calls.
+    // setTransform(a, b, c, d, e, f): a/d = x/y scale, b/c = skew, e/f = translation.
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
