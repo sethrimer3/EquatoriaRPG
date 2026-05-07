@@ -15,12 +15,13 @@ import { tickObjectiveFeedback, MATH_SOLVED_FLASH_MS } from '../../sim/rpg/math-
 
 // ── Layout constants ───────────────────────────────────────────
 
-const RING_THICK = 1.5;          // progress ring stroke width (canvas units)
-const RING_OFFSET_Y = 8;         // px above enemy centre to ring centre
+const RING_THICK = 1.5;               // progress ring stroke width (canvas units)
+const RING_OFFSET_Y = 8;              // px above enemy centre to ring centre
 const LABEL_FONT = '5px monospace';
+const EQUATION_SNAKE_FONT = '5px monospace'; // same size but rendered in gold accent
 const FEEDBACK_FONT = '6px monospace';
-const FEEDBACK_OFFSET_Y = -12;   // px above ring centre
-const LABEL_CACHE_SIZE = 64;     // maximum entries in the text-width LRU cache
+const FEEDBACK_OFFSET_Y = -12;        // px above ring centre
+const LABEL_CACHE_SIZE = 64;          // maximum entries in the text-width LRU cache
 
 // ── Text-width cache (FIFO eviction, avoids measureText on every frame) ─
 
@@ -75,29 +76,33 @@ export function drawMathObjective(
   ctx.stroke();
 
   // ── Symbol label ───────────────────────────────────────────
-  ctx.font = LABEL_FONT;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'center';
 
-  const label = `${obj.displaySymbol} ${obj.compactValueText}`;
+  // For equationSnake mode show the full equation text (e.g. "x = 15") in gold;
+  // for symbolCore mode show the compact symbol + value (e.g. "= 15") in pale blue.
+  const useEquationText = obj.displayMode === 'equationSnake' && !!obj.equationText;
+  const label = useEquationText ? obj.equationText! : `${obj.displaySymbol} ${obj.compactValueText}`;
+  ctx.font = useEquationText ? EQUATION_SNAKE_FONT : LABEL_FONT;
+
   const bgW = getCachedTextWidth(ctx, label) + 3;
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillStyle = useEquationText ? 'rgba(0,0,0,0.70)' : 'rgba(0,0,0,0.55)';
   ctx.fillRect(ex - bgW / 2, ringCy - 3.5, bgW, 7);
 
-  ctx.fillStyle = '#eef';
+  // Gold for equation-snake (makes Diamond enemies stand out); pale blue for standard.
+  ctx.fillStyle = useEquationText ? '#ffd764' : '#eef';
   ctx.fillText(label, ex, ringCy);
 
   // ── Feedback flash ─────────────────────────────────────────
   if (obj.feedback && obj.feedback.timerMs > 0) {
+    // Fade out over the last 80 ms; full brightness for the rest of the duration.
     const alpha = Math.min(1, obj.feedback.timerMs / 80);
     ctx.font = FEEDBACK_FONT;
     ctx.globalAlpha = alpha;
     ctx.fillStyle = obj.feedback.kind === 'accepted' ? '#4f8' : '#f44';
-    ctx.fillText(
-      obj.feedback.kind === 'accepted' ? '✓' : '✗',
-      ex,
-      ringCy + FEEDBACK_OFFSET_Y,
-    );
+    // Show the actual feedback text (e.g. "needs ≥15", "too high (=25)", "Σ 45/200")
+    // so players know exactly what the objective requires.
+    ctx.fillText(obj.feedback.text, ex, ringCy + FEEDBACK_OFFSET_Y);
     ctx.globalAlpha = 1;
   }
 

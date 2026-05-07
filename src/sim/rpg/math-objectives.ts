@@ -388,9 +388,16 @@ export function evaluateHit(obj: MathObjective, mathDmg: number): EvalHitResult 
       if (Math.abs(mathDmg - ok.target) <= ok.tolerance) {
         return { accepted: true, feedbackText: `✓ ≈${formatMathCompact(ok.target)}`, progressUpdated: true, nowSolved: true };
       }
+      if (mathDmg > ok.target + ok.tolerance) {
+        return {
+          accepted: false,
+          feedbackText: `too high! (≈${formatMathCompact(ok.target)})`,
+          progressUpdated: false, nowSolved: false,
+        };
+      }
       return {
         accepted: false,
-        feedbackText: `needs ≈${formatMathCompact(ok.target)} ±${ok.tolerance}`,
+        feedbackText: `too low (≈${formatMathCompact(ok.target)})`,
         progressUpdated: false, nowSolved: false,
       };
     }
