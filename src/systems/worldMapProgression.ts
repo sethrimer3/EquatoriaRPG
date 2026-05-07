@@ -164,11 +164,32 @@ export function markLevelComplete(
   }
 }
 
-// ─── Placeholders ─────────────────────────────────────────────────
+// ─── Level launcher registration ──────────────────────────────────
 
-/** Placeholder: begin a mandatory/boss level. Returns false until gameplay is wired. */
+type LevelLauncherFn = (worldId: WorldId, levelId: string) => void;
+let _levelLauncher: LevelLauncherFn | null = null;
+
+/**
+ * Register the callback that opens the LevelScreen when a level is started.
+ * Called once during app bootstrap (game-app.ts).
+ */
+export function registerLevelLauncher(fn: LevelLauncherFn): void {
+  _levelLauncher = fn;
+}
+
+// ─── Launch actions ───────────────────────────────────────────────
+
+/**
+ * Begin a mandatory/boss level.
+ * Invokes the registered level launcher if one has been provided.
+ * Returns true if the launcher was called, false otherwise.
+ */
 export function startWorldLevel(worldId: WorldId, levelId: string): boolean {
-  console.log(`[WorldMap] startWorldLevel(${worldId}, ${levelId}) — placeholder`);
+  if (_levelLauncher) {
+    _levelLauncher(worldId, levelId);
+    return true;
+  }
+  console.log(`[WorldMap] startWorldLevel(${worldId}, ${levelId}) — no launcher registered`);
   return false;
 }
 

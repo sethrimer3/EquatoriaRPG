@@ -38,7 +38,9 @@ import { createRpgMenuPanel } from '../ui/panels/rpg-menu-panel';
 import { addMotes } from '../sim/resources/resource-state';
 import { createMainMenu } from '../ui/main-menu';
 import { createWorldMapScreen } from '../ui/world-map/WorldMapScreen';
-import { createWorldMapProgressionState } from '../systems/worldMapProgression';
+import { createWorldMapProgressionState, registerLevelLauncher } from '../systems/worldMapProgression';
+import { createLevelScreen } from '../ui/level-screen/LevelScreen';
+import { WORLD_LEVEL_PLANS, WORLD_COLOR_MAP } from '../data/worldLevelPlans';
 
 import type { AppState, UIPanels } from './app-types';
 import { handleAction as handleActionImpl } from './app-actions';
@@ -206,6 +208,20 @@ export async function startApp(): Promise<void> {
     worldMapProgression,
   );
   root.appendChild(worldMapScreen.element);
+
+  // ── Level screen (opened by startWorldLevel via registerLevelLauncher) ──
+  const levelScreen = createLevelScreen(() => { levelScreen.hide(); });
+  root.appendChild(levelScreen.element);
+
+  registerLevelLauncher((worldId, levelId) => {
+    const levelDef = WORLD_LEVEL_PLANS.get(levelId);
+    const worldColor = WORLD_COLOR_MAP.get(worldId) ?? '#80c8ff';
+    if (levelDef) {
+      levelScreen.show(levelDef, worldColor);
+    } else {
+      console.warn(`[LevelLauncher] No layout found for levelId="${levelId}" in world="${worldId}"`);
+    }
+  });
 
   // ── Map button (shown next to ⚔ Menu button in RPG view) ──
   const mapBtn = document.createElement('button');
