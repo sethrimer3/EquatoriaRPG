@@ -294,8 +294,8 @@ export const ALIVEN_CONTACT_RADIUS      = 6;
 export const ALIVEN_CONTACT_CD_MS       = 800;
 /** XP multiplier relative to a laser kill. */
 export const ALIVEN_XP_MULT             = 8;
-/** Wave threshold at which alivened swarms first appear. */
-export const ALIVEN_FIRST_WAVE          = 80;
+/** Wave threshold at which alivened swarms first appear. Must match wave-definitions.ts. */
+export const ALIVEN_FIRST_WAVE          = 95;
 
 /**
  * Flat [4×4] row-major interaction matrix for AlivenSwarm enemies.
