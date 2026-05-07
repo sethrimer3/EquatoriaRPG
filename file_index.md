@@ -954,3 +954,30 @@ Audio system — eight focused modules:
 - Returns `{ sizeIndex, emitRatePerSec, sizeLabel }`.
 - Works for arbitrary sizes (not capped at 4×4).
 - Used by `app-game-loop.ts` for per-frame loom particle emission.
+
+### src/types/worldMapTypes.ts
+- TypeScript interfaces for the world map system.
+- Exports: `WorldId`, `WorldUnlockState`, `LevelUnlockState`, `MandatoryLevel`, `Base6Level`, `WorldData`, `WorldProgressState`, `WorldMapProgressionState`.
+
+### src/data/worldMapData.ts
+- Static data for all 11 worlds (Origin Nexus → Eigen Citadel).
+- Exports: `WORLD_MAP_DATA: WorldData[]`.
+- Each world has 10 mandatory levels (levels 1–9 regular, level 10 boss) and 6 Base6 optional challenges.
+- Worlds are ordered by chapter (1–11); positions are normalized 0–1 spiral coordinates.
+
+### src/systems/worldMapProgression.ts
+- Manages mutable `WorldMapProgressionState` across the 11 worlds.
+- Exports: `createWorldMapProgressionState`, `getWorldUnlockState`, `getLevelUnlockState`, `isBase6LevelUnlocked`, `markLevelComplete`, `startWorldLevel` (placeholder), `startOptionalChallenge` (placeholder), `serializeWorldMapState`, `deserializeWorldMapState`.
+- Unlock logic: completing a boss level (level 10) unlocks worlds that list that boss ID in their `unlockedBy` array. Base6 unlocks after level 5 of a world is complete.
+
+### src/ui/world-map/WorldMapScreen.ts
+- Full-screen world map overlay. Canvas spiral map on the left; DOM detail panel on the right.
+- Exports: `createWorldMapScreen(onClose, initialState): WorldMapScreen`, interface `WorldMapScreen { element, show(), hide(), refresh(state) }`.
+- Canvas rendering: 11 colored world nodes + curved paths, selected node highlight, boss rings, chapter numbers. No per-frame animation loop — redraws on interaction and resize only.
+- Detail panel: world name/subtitle/theme/reward, mandatory level list with lock icons, Base6 challenge list, Start button, boss info card.
+- DEV mode: toggle unlocks all worlds for testing; right-click levels to mark complete.
+
+### src/styles/world-map.css
+- Styles for the world map screen overlay.
+- Classes: `.wm-screen`, `.wm-header`, `.wm-back-btn`, `.wm-dev-btn`, `.wm-body`, `.wm-canvas-area`, `.wm-detail-panel`, `.wm-detail-content`, `.wm-world-header`, `.wm-level-item` (+ state modifiers), `.wm-start-btn`, `.wm-boss-info`.
+- Responsive: stacks vertically on mobile portrait (≤600px); compact header on landscape mobile (≤500px height).

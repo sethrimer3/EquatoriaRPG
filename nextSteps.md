@@ -1,5 +1,44 @@
 # nextSteps.md — Math Objective System & Particle-Life Enemies
 
+---
+
+## World Map System (newly added)
+
+### What was implemented
+- `src/types/worldMapTypes.ts` — Full TypeScript interfaces for all world map types
+- `src/data/worldMapData.ts` — All 11 worlds with 10 mandatory levels + 6 Base6 optional challenges each
+- `src/systems/worldMapProgression.ts` — Progression state (unlock/complete logic, serialization helpers)
+- `src/ui/world-map/WorldMapScreen.ts` — Full-screen canvas + DOM overlay
+  - Spiral path connecting 11 world nodes, color-coded states, boss rings, click-to-select
+  - Detail panel: world info, mandatory level list, Base6 challenge list, Start button
+  - DEV mode toggle (right-click levels to mark complete for testing)
+- `src/styles/world-map.css` — World map CSS using existing palette
+- Integration: `🗺 Map` button added to RPG view next to `⚔ Menu`
+
+### What needs real gameplay integration
+- `startWorldLevel()` and `startOptionalChallenge()` are placeholders — wire to level launcher
+- `serializeWorldMapState()` / `deserializeWorldMapState()` are ready — add to `saveGame()` / `loadGame()`
+- Progression resets on reload until save integration is complete
+
+### Unlock chain
+| World | Unlocked By |
+|-------|-------------|
+| Origin Nexus | Start of game |
+| Arithmetic Sands | on_10 (The Blank Variable) |
+| Fraction Fen | as_10 (The Sum Titan) |
+| Algebra Grove | ff_10 (The Denominator Hydra) |
+| Geometry Peaks | ag_10 (The Balance Warden) |
+| Coordinate City | gp_10 (The Polygon Monarch) |
+| Calculus Falls | cc_10 (The Cartesian Engine) |
+| Probability Gardens | cf_10 (The Derivative Leviathan) |
+| Matrix Bastion | pg_10 (The Chance Matriarch) |
+| Fractal Expanse | mb_10 (The Array General) |
+| Eigen Citadel | fe_10 (The Recursive Seraph) |
+
+Base 6 challenges unlock after mandatory level 5 of each world is completed.
+
+---
+
 ## What was implemented
 
 ### Math objective system
