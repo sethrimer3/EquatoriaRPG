@@ -1,5 +1,7 @@
 // rpg-types.ts — extracted from rpg-render.ts
 
+import type { MathObjective } from '../../sim/rpg/math-objective-types';
+
 export interface RpgMote {
   x: number; y: number;
   vx: number; vy: number;
@@ -49,6 +51,7 @@ export interface LaserEnemy {
   attackTrail: AttackTrailState;
   patrolTimerMs: number;
   hasHitPlayer: boolean;
+  mathObjective?: MathObjective;
 }
 
 export type RpgPhase = 'alive' | 'dying' | 'restarting';
@@ -131,6 +134,7 @@ export interface SapphireEnemy {
   shieldHp: number; maxShieldHp: number;
   missileTimerMs: number;
   patrolTimerMs: number;
+  mathObjective?: MathObjective;
 }
 
 export interface SapphireMissile {

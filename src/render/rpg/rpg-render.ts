@@ -54,7 +54,15 @@ import {
   WEAPON_PARTICLE_ORBIT_SPEED, WEAPON_PARTICLE_ORBIT_RADIUS, WEAPON_PARTICLE_MIN_SPEED,
   ORBIT_PROJ_RADIUS, ORBIT_PROJ_TRAIL_CAP,
   WEAPON_ORBIT_TRAIL_CAP,
+  LASER_ENEMY_SIZE, SAPPHIRE_ENEMY_SIZE,
 } from './rpg-constants';
+import {
+  EMERALD_ENEMY_SIZE, AMBER_ENEMY_SIZE, VOID_ENEMY_SIZE,
+  QUARTZ_ENEMY_SIZE, RUBY_ENEMY_SIZE, SUNSTONE_ENEMY_SIZE,
+  CITRINE_ENEMY_SIZE, IOLITE_ENEMY_SIZE, AMETHYST_ENEMY_SIZE,
+  DIAMOND_ENEMY_SIZE, NULLSTONE_ENEMY_SIZE,
+  FRACTERYL_ENEMY_SIZE, EIGENSTEIN_ENEMY_SIZE,
+} from './rpg-enemy-constants';
 import {
   drawSapphireEnemies, drawSapphireMissiles,
   drawEmeraldEnemies,
@@ -76,6 +84,7 @@ import {
   drawEigensteinEnemies, drawEigensteinBeams,
   drawTeleportParticles,
 } from './rpg-enemy-draw-adv';
+import { drawMathObjectivesForArray } from './rpg-math-objective-draw';
 import {
   drawBossProjectiles,
   drawSandProjectiles,
@@ -280,6 +289,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
   const enemies: LaserEnemy[]    = [];
   const spawnQueue: SpawnEntry[] = [];
   let glowTimeS = 0;
+  let _currentDeltaMs = 0; // captured by draw() for math objective overlay ticks
   let _isActive = false;
   let rpgPhase: RpgPhase = 'alive';
   let phaseTimerMs     = 0;
@@ -1073,28 +1083,43 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
     fluid.render(ctx);
 
     drawLaserEnemies(ctx, enemies, nowMs);
+    drawMathObjectivesForArray(ctx, enemies, LASER_ENEMY_SIZE / 2, _currentDeltaMs);
     drawSapphireEnemies(ctx, sapphireEnemies);
+    drawMathObjectivesForArray(ctx, sapphireEnemies, SAPPHIRE_ENEMY_SIZE / 2, _currentDeltaMs);
     drawSapphireMissiles(ctx, sapphireMissiles);
     drawEmeraldEnemies(ctx, emeraldEnemies);
+    drawMathObjectivesForArray(ctx, emeraldEnemies, EMERALD_ENEMY_SIZE / 2, _currentDeltaMs);
     drawAmberEnemies(ctx, amberEnemies);
+    drawMathObjectivesForArray(ctx, amberEnemies, AMBER_ENEMY_SIZE / 2, _currentDeltaMs);
     drawAmberShards(ctx, amberShards);
     drawVoidEnemies(ctx, voidEnemies);
+    drawMathObjectivesForArray(ctx, voidEnemies, VOID_ENEMY_SIZE / 2, _currentDeltaMs);
     drawQuartzEnemies(ctx, quartzEnemies);
+    drawMathObjectivesForArray(ctx, quartzEnemies, QUARTZ_ENEMY_SIZE / 2, _currentDeltaMs);
     drawQuartzSpikes(ctx, quartzSpikes);
     drawRubyEnemies(ctx, rubyEnemies);
+    drawMathObjectivesForArray(ctx, rubyEnemies, RUBY_ENEMY_SIZE / 2, _currentDeltaMs);
     drawRubyBolts(ctx, rubyBolts);
     drawSunstoneEnemies(ctx, sunstoneEnemies);
+    drawMathObjectivesForArray(ctx, sunstoneEnemies, SUNSTONE_ENEMY_SIZE / 2, _currentDeltaMs);
     drawCitrineEnemies(ctx, citrineEnemies);
+    drawMathObjectivesForArray(ctx, citrineEnemies, CITRINE_ENEMY_SIZE / 2, _currentDeltaMs);
     drawCitrineBolts(ctx, citrineBolts);
     drawIoliteEnemies(ctx, ioliteEnemies);
+    drawMathObjectivesForArray(ctx, ioliteEnemies, IOLITE_ENEMY_SIZE / 2, _currentDeltaMs);
     drawAmethystEnemies(ctx, amethystEnemies);
+    drawMathObjectivesForArray(ctx, amethystEnemies, AMETHYST_ENEMY_SIZE / 2, _currentDeltaMs);
     drawAmethystShards(ctx, amethystShards);
     drawDiamondEnemies(ctx, diamondEnemies);
+    drawMathObjectivesForArray(ctx, diamondEnemies, DIAMOND_ENEMY_SIZE / 2, _currentDeltaMs);
     drawDiamondShards(ctx, diamondShards);
     drawNullstoneEnemies(ctx, nullstoneEnemies);
+    drawMathObjectivesForArray(ctx, nullstoneEnemies, NULLSTONE_ENEMY_SIZE / 2, _currentDeltaMs);
     drawVoidTendrils(ctx, voidTendrils);
     drawFracterylEnemies(ctx, fracterylEnemies, fracterylShards);
+    drawMathObjectivesForArray(ctx, fracterylEnemies, FRACTERYL_ENEMY_SIZE / 2, _currentDeltaMs);
     drawEigensteinEnemies(ctx, eigensteinEnemies);
+    drawMathObjectivesForArray(ctx, eigensteinEnemies, EIGENSTEIN_ENEMY_SIZE / 2, _currentDeltaMs);
     drawEigensteinBeams(ctx, eigensteinBeams, widthPx, heightPx);
     drawBottomSafeZone(ctx, isBossWaveActive, widthPx, heightPx, glowTimeS);
     drawDanmakuSafeZone(ctx, bossEnemy, danmakuSafeZone);
@@ -1239,6 +1264,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
     update(deltaMs: number, autoMoveEnabled = false): void {
       const nowMs = performance.now();
       glowTimeS += deltaMs / 1000;
+      _currentDeltaMs = deltaMs;
       _autoMoveEnabled = autoMoveEnabled;
 
       if (rpgPhase === 'dying') {
