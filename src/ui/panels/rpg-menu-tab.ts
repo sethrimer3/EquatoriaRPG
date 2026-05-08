@@ -30,18 +30,27 @@ export interface RpgMenuTabPane {
   setRpgBarAtTop(atTop: boolean): void;
 }
 
+/** Navigation callbacks passed to the menu tab for Back-to-Map / Back-to-Main-Menu. */
+export interface RpgMenuNavCallbacks {
+  onBackToWorldMap?: () => void;
+  onBackToMainMenu?: () => void;
+}
+
 // ─── Factory ───────────────────────────────────────────────────────
 
 export function createRpgMenuTabPane(
   dispatch: ActionHandler,
   onAutoMoveChange: (enabled: boolean) => void,
   onRpgBarAtTopChange: (atTop: boolean) => void,
+  navCallbacks?: RpgMenuNavCallbacks,
 ): RpgMenuTabPane {
   const element = document.createElement('div');
 
   let isAutoMoveEnabled = false;
   let isConfirmingRespawn = false;
   let rpgBarAtTop = false;
+  /** 'none' | 'worldMap' | 'mainMenu' */
+  let pendingNav: 'none' | 'worldMap' | 'mainMenu' = 'none';
 
   function update(rpgState: RpgSimState | null, isDevMode = false, barAtTop = false): void {
     rpgBarAtTop = barAtTop;
@@ -258,6 +267,84 @@ export function createRpgMenuTabPane(
       devRow.appendChild(jumpBtn);
       devSection.appendChild(devRow);
       element.appendChild(devSection);
+    }
+
+    // ── Navigation buttons (Back to World Map / Back to Main Menu) ──
+    if (navCallbacks?.onBackToWorldMap || navCallbacks?.onBackToMainMenu) {
+      element.appendChild(makePageBreak('small'));
+
+      const navSection = document.createElement('div');
+      navSection.className = 'rpg-menu__nav-section';
+
+      /** Show the inline confirmation for a navigation target. */
+      function showConfirm(target: 'worldMap' | 'mainMenu'): void {
+        pendingNav = target;
+        renderConfirm();
+      }
+
+      function cancelConfirm(): void {
+        pendingNav = 'none';
+        renderNav();
+      }
+
+      function confirmNav(): void {
+        const target = pendingNav;
+        pendingNav = 'none';
+        if (target === 'worldMap') navCallbacks?.onBackToWorldMap?.();
+        else if (target === 'mainMenu') navCallbacks?.onBackToMainMenu?.();
+      }
+
+      function renderNav(): void {
+        navSection.innerHTML = '';
+
+        if (navCallbacks?.onBackToWorldMap) {
+          const worldMapBtn = document.createElement('button');
+          worldMapBtn.className = 'rpg-menu__nav-btn';
+          worldMapBtn.textContent = '🗺 Back to World Map';
+          worldMapBtn.addEventListener('click', () => showConfirm('worldMap'));
+          navSection.appendChild(worldMapBtn);
+        }
+
+        if (navCallbacks?.onBackToMainMenu) {
+          const mainMenuBtn = document.createElement('button');
+          mainMenuBtn.className = 'rpg-menu__nav-btn rpg-menu__nav-btn--danger';
+          mainMenuBtn.textContent = '🏠 Back to Main Menu';
+          mainMenuBtn.addEventListener('click', () => showConfirm('mainMenu'));
+          navSection.appendChild(mainMenuBtn);
+        }
+      }
+
+      function renderConfirm(): void {
+        navSection.innerHTML = '';
+
+        const warning = document.createElement('div');
+        warning.className = 'rpg-menu__nav-warning';
+        warning.textContent = 'In-level progress will be lost. Persistent upgrades and completed levels are kept. Are you sure?';
+        navSection.appendChild(warning);
+
+        const btnRow = document.createElement('div');
+        btnRow.className = 'rpg-menu__nav-confirm-row';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'rpg-menu__nav-btn';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.addEventListener('click', cancelConfirm);
+
+        const confirmBtn = document.createElement('button');
+        confirmBtn.className = 'rpg-menu__nav-btn rpg-menu__nav-btn--confirm';
+        confirmBtn.textContent = 'Confirm';
+        confirmBtn.addEventListener('click', confirmNav);
+
+        btnRow.appendChild(cancelBtn);
+        btnRow.appendChild(confirmBtn);
+        navSection.appendChild(btnRow);
+      }
+
+      // Render initial state
+      if (pendingNav !== 'none') renderConfirm();
+      else renderNav();
+
+      element.appendChild(navSection);
     }
   }
 

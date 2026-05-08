@@ -15,7 +15,7 @@ import type { RpgSimState } from '../../sim/rpg/rpg-state';
 import type { ResourceState } from '../../sim/resources';
 import type { ActionHandler } from '../../input';
 import type { NumberFormat } from '../../util';
-import { createRpgMenuTabPane } from './rpg-menu-tab';
+import { createRpgMenuTabPane, type RpgMenuNavCallbacks } from './rpg-menu-tab';
 import { createRpgWeaponsTabPane } from './rpg-weapons-tab';
 import { createRpgUpgradesTabPane } from './rpg-upgrades-tab';
 import { createRpgBossesTabPane } from './rpg-bosses-tab';
@@ -54,6 +54,8 @@ export function createRpgMenuPanel(
   onRpgBarAtTopChange: (atTop: boolean) => void = () => undefined,
   /** Pre-built settings panel element to mount under the Settings tab. */
   settingsEl?: HTMLElement,
+  /** Navigation callbacks for Back-to-World-Map and Back-to-Main-Menu. */
+  navCallbacks?: RpgMenuNavCallbacks,
 ): RpgMenuPanel {
   const element = document.createElement('div');
   element.id = 'rpg-menu-panel';
@@ -115,6 +117,7 @@ export function createRpgMenuPanel(
     dispatch,
     (enabled) => { panel.isAutoMoveEnabled = enabled; },
     (atTop) => { onRpgBarAtTopChange(atTop); },
+    navCallbacks,
   );
   const weaponsTabPane  = createRpgWeaponsTabPane(dispatch);
   const upgradesTabPane = createRpgUpgradesTabPane(dispatch);

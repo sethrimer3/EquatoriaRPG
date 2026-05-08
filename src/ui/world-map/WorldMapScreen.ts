@@ -2,19 +2,18 @@
  * WorldMapScreen.ts — Full-screen world map overlay.
  *
  * Layout:
- *   ┌──────────────────────────────────────────────────────────┐
- *   │  [← Back]       🌌 The Equation Spiral      [dev mode]  │
- *   ├───────────────────────────────┬──────────────────────────┤
- *   │  Canvas: spiral path of 11    │  Detail panel (DOM)      │
- *   │  world nodes. Click a node →  │  • World name/subtitle   │
- *   │  highlights + sub-nodes.      │  • Theme + reward        │
- *   │                               │  • Mandatory levels list │
- *   │                               │  • Base6 levels list     │
- *   │                               │  • [Start Level] button  │
- *   └───────────────────────────────┴──────────────────────────┘
+ *   ┌────────────────────────────────────────────────────────────┐
+ *   │  [← Main Menu]   🌌 The Equation Spiral      [dev mode]   │
+ *   ├────────────────────────────────┬───────────────────────────┤
+ *   │  Canvas: animated spiral map   │  Detail panel (DOM)       │
+ *   │  with particle simulation.     │  • World name/subtitle    │
+ *   │  Click a world node →          │  • Theme + reward         │
+ *   │  highlights + sub-nodes.       │  • Mandatory levels list  │
+ *   │                                │  • Base6 levels list      │
+ *   │                                │  • [Start Level] button   │
+ *   └────────────────────────────────┴───────────────────────────┘
  *
- * Canvas rendering is intentionally simple — no per-frame animation
- * loop while idle. The map redraws on interaction or resize only.
+ * A continuous RAF loop drives the particle simulation when the map is visible.
  */
 
 import type { WorldId, WorldMapProgressionState } from '../../types/worldMapTypes';
@@ -27,6 +26,10 @@ import {
   markLevelComplete,
 } from '../../systems/worldMapProgression';
 import { WORLD_MAP_DATA } from '../../data/worldMapData';
+import {
+  createWorldMapParticles,
+  type ParticleQuality,
+} from '../../render/world-map/worldMapParticles';
 
 // ─── Public interface ─────────────────────────────────────────────
 
@@ -35,6 +38,8 @@ export interface WorldMapScreen {
   show(): void;
   hide(): void;
   refresh(state: WorldMapProgressionState): void;
+  /** Update particle quality (e.g. from settings change). */
+  setParticleQuality(quality: ParticleQuality): void;
   destroy(): void;
 }
 
@@ -81,11 +86,17 @@ const COLOR_PATH_END   = '#a78bfa';
 export function createWorldMapScreen(
   onClose: () => void,
   initialState: WorldMapProgressionState,
+  onMainMenu?: () => void,
 ): WorldMapScreen {
   let state = initialState;
   let selectedWorldId: WorldId | null = null;
   let nodes: WorldNode[] = [];
-  let rafId = 0;
+  /** Animation loop RAF id (drives particles + map redraws). */
+  let animRafId = 0;
+  let lastFrameMs = 0;
+  let particleQuality: ParticleQuality = 'full';
+  let particleSys = createWorldMapParticles(particleQuality);
+  let isVisible = false;
 
   // ── Root element ──
   const element = document.createElement('div');
@@ -99,9 +110,16 @@ export function createWorldMapScreen(
 
   const backBtn = document.createElement('button');
   backBtn.className = 'wm-back-btn';
-  backBtn.textContent = '← Back';
-  backBtn.setAttribute('aria-label', 'Close world map');
-  backBtn.addEventListener('click', () => onClose());
+  backBtn.textContent = onMainMenu ? '← Main Menu' : '← Back';
+  backBtn.setAttribute('aria-label', onMainMenu ? 'Back to main menu' : 'Close world map');
+  backBtn.addEventListener('click', () => {
+    if (onMainMenu) {
+      screen.hide();
+      onMainMenu();
+    } else {
+      onClose();
+    }
+  });
 
   const titleEl = document.createElement('span');
   titleEl.className = 'wm-header-title';
@@ -193,13 +211,20 @@ export function createWorldMapScreen(
     }
   }
 
-  /** Draw the full map. */
+  /** Draw the full map (called every animation frame). */
   function drawMap(): void {
     const w = canvas.width;
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
     if (nodes.length === 0) return;
+
+    // Use CSS pixel space (matches ctx DPR transform).
+    const cxCSS = canvasArea.clientWidth / 2;
+    const cyCSS = canvasArea.clientHeight / 2;
+
+    // ── Draw particle simulation (below paths and nodes) ──
+    particleSys.draw(ctx, cxCSS, cyCSS);
 
     // ── Draw paths between worlds (order follows the spiral) ──
     for (let i = 0; i < nodes.length - 1; i++) {
@@ -588,8 +613,16 @@ export function createWorldMapScreen(
 
   // ─── Resize ─────────────────────────────────────────────────────
 
+  let resizeRafId = 0;
+
+  /** Maximum time delta clamped per frame to guard against tab-switch gaps. */
+  const MAX_FRAME_DELTA_MS = 200;
+
   function resize(): void {
     const { width, height } = canvasArea.getBoundingClientRect();
+    // Guard against zero-dimension layouts (e.g., hidden tabs) that would cause
+    // invalid canvas state and divide-by-zero in particle radius calculations.
+    if (width === 0 || height === 0) return;
     const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
@@ -599,26 +632,71 @@ export function createWorldMapScreen(
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
     buildNodes();
+    // Re-initialize particles. Use CSS pixel space — the ctx DPR transform means
+    // all drawing coordinates are in CSS pixels, so particles must be too.
+    const cxCSS = width / 2;
+    const cyCSS = height / 2;
+    const maxR = Math.min(cxCSS, cyCSS) * 0.92;
+    particleSys.resize(cxCSS, cyCSS, maxR);
     drawMap();
   }
 
   const resizeObserver = new ResizeObserver(() => {
-    cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(resize);
+    cancelAnimationFrame(resizeRafId);
+    resizeRafId = requestAnimationFrame(resize);
   });
   resizeObserver.observe(canvasArea);
+
+  // ─── Animation loop (runs while the map is visible) ─────────────
+
+  function animFrame(nowMs: number): void {
+    if (!isVisible) return;
+    // Clamp dtMs to avoid runaway simulation after tab switches or debugger pauses.
+    const dtMs = Math.min(nowMs - lastFrameMs, MAX_FRAME_DELTA_MS);
+    lastFrameMs = nowMs;
+
+    // Particle positions are in CSS pixel space (matching the ctx DPR transform).
+    const cxCSS = canvasArea.clientWidth / 2;
+    const cyCSS = canvasArea.clientHeight / 2;
+    const maxR = Math.min(cxCSS, cyCSS) * 0.92;
+
+    particleSys.update(dtMs, cxCSS, cyCSS, maxR);
+    drawMap();
+
+    animRafId = requestAnimationFrame(animFrame);
+  }
+
+  function startAnimLoop(): void {
+    if (animRafId !== 0) return;
+    lastFrameMs = performance.now();
+    particleSys.setActive(true);
+    animRafId = requestAnimationFrame(animFrame);
+  }
+
+  function stopAnimLoop(): void {
+    particleSys.setActive(false);
+    cancelAnimationFrame(animRafId);
+    animRafId = 0;
+  }
 
   // ─── Public API ──────────────────────────────────────────────────
 
   function show(): void {
+    isVisible = true;
     element.classList.add('wm-screen--visible');
     syncDevButton();
-    // Defer first draw to ensure layout is complete
-    requestAnimationFrame(() => { resize(); renderDetailPanel(); });
+    // Defer first draw to ensure layout is complete, then start anim loop
+    requestAnimationFrame(() => {
+      resize();
+      renderDetailPanel();
+      startAnimLoop();
+    });
   }
 
   function hide(): void {
+    isVisible = false;
     element.classList.remove('wm-screen--visible');
+    stopAnimLoop();
   }
 
   function refresh(newState: WorldMapProgressionState): void {
@@ -630,15 +708,36 @@ export function createWorldMapScreen(
   }
 
   function destroy(): void {
+    isVisible = false;
     resizeObserver.disconnect();
-    cancelAnimationFrame(rafId);
+    stopAnimLoop();
+    cancelAnimationFrame(resizeRafId);
   }
 
   // Initial setup
   syncDevButton();
   renderDetailPanel();
 
-  return { element, show, hide, refresh, destroy };
+  const screen: WorldMapScreen = {
+    element,
+    show,
+    hide,
+    refresh,
+    setParticleQuality(quality: ParticleQuality): void {
+      if (quality === particleQuality) return;
+      particleQuality = quality;
+      particleSys = createWorldMapParticles(quality);
+      if (isVisible) {
+        const cxCSS = canvasArea.clientWidth / 2;
+        const cyCSS = canvasArea.clientHeight / 2;
+        const maxR = Math.min(cxCSS, cyCSS) * 0.92;
+        particleSys.resize(cxCSS, cyCSS, maxR);
+        particleSys.setActive(true);
+      }
+    },
+    destroy,
+  };
+  return screen;
 }
 
 // ─── Color utility helpers ────────────────────────────────────────

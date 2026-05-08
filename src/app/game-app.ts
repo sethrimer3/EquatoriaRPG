@@ -163,6 +163,33 @@ export async function startApp(): Promise<void> {
     dispatch(action);
   }, audioSystem, applyFocusedAudio);
 
+  // ── Forward-declared references — assigned later; closures capture the binding. ──
+  // All navigation helpers below are CALLED only after every object is created,
+  // so these forward refs will always be properly assigned at call time.
+  // eslint-disable-next-line prefer-const
+  let worldMapScreen: ReturnType<typeof createWorldMapScreen> = null!;
+  // eslint-disable-next-line prefer-const
+  let gameLoop: ReturnType<typeof createGameLoop> = null!;
+
+  // ── RPG navigation helpers ────────────────────────────────────────
+
+  function showWorldMap(): void {
+    gameLoop.stop();
+    rpgContainer.style.display = 'none';
+    rpgRender.statsPanel.style.display = 'none';
+    rpgMenuPanel.setVisible(false);
+    worldMapScreen.show();
+  }
+
+  function goToMainMenu(): void {
+    gameLoop.stop();
+    worldMapScreen.hide();
+    // Save any in-progress persistent data, then reload.
+    // (In-level temporary progress is discarded; persistent upgrades/completions are kept.)
+    saveGame(appState.game);
+    window.location.reload();
+  }
+
   // ── Helper: apply the RPG bar position setting ──
   function applyRpgBarPosition(atTop: boolean): void {
     rpgRender.statsPanel.classList.toggle('rpg-bar-at-top', atTop);
@@ -170,7 +197,7 @@ export async function startApp(): Promise<void> {
     rpgMenuPanel.element.classList.toggle('rpg-bar-at-top', atTop);
   }
 
-  // ── RPG menu panel (with Settings tab) ──
+  // ── RPG menu panel — created once, with nav callbacks via closures ──
   const rpgMenuPanel = createRpgMenuPanel(
     (action: GameAction) => { dispatch(action); },
     (atTop) => {
@@ -180,6 +207,7 @@ export async function startApp(): Promise<void> {
       rpgMenuPanel.setRpgBarAtTop(atTop);
     },
     settingsPanel.element,
+    { onBackToWorldMap: showWorldMap, onBackToMainMenu: goToMainMenu },
   );
   rpgMenuPanel.element.style.display = 'none';
   root.appendChild(rpgMenuPanel.element);
@@ -203,20 +231,25 @@ export async function startApp(): Promise<void> {
 
   // ── World map progression + screen ──
   const worldMapProgression = createWorldMapProgressionState(settings.isDevMode);
-  const worldMapScreen = createWorldMapScreen(
+  worldMapScreen = createWorldMapScreen(
     () => { worldMapScreen.hide(); },
     worldMapProgression,
+    goToMainMenu,
   );
   root.appendChild(worldMapScreen.element);
 
   // ── Level screen (opened by startWorldLevel via registerLevelLauncher) ──
-  const levelScreen = createLevelScreen(() => { levelScreen.hide(); });
+  const levelScreen = createLevelScreen(() => {
+    levelScreen.hide();
+    worldMapScreen.show();
+  });
   root.appendChild(levelScreen.element);
 
   registerLevelLauncher((worldId, levelId) => {
     const levelDef = WORLD_LEVEL_PLANS.get(levelId);
     const worldColor = WORLD_COLOR_MAP.get(worldId) ?? WORLD_COLOR_MAP.get('origin_nexus') ?? '#80c8ff';
     if (levelDef) {
+      worldMapScreen.hide();
       levelScreen.show(levelDef, worldColor);
     } else {
       console.warn(`[LevelLauncher] No layout found for levelId="${levelId}" in world="${worldId}"`);
@@ -228,9 +261,7 @@ export async function startApp(): Promise<void> {
   mapBtn.className = 'rpg-menu-btn';
   mapBtn.textContent = '🗺 Map';
   mapBtn.setAttribute('aria-label', 'Open world map');
-  mapBtn.addEventListener('click', () => {
-    worldMapScreen.show();
-  });
+  mapBtn.addEventListener('click', () => { showWorldMap(); });
   rpgRender.menuButtonContainer.appendChild(mapBtn);
 
   const uiPanels: UIPanels = {
@@ -240,7 +271,7 @@ export async function startApp(): Promise<void> {
     rpgMenuPanel,
   };
 
-  // RPG is activated after the main menu transition completes (see below).
+  // RPG is activated when the player launches a level from the World Map.
   // Do NOT call rpgRender.setActive(true) / resize() here.
 
   // ── Action dispatch ──
@@ -313,9 +344,9 @@ export async function startApp(): Promise<void> {
   window.addEventListener('resize', onResize);
   bgAnimation.resize(canvasContainer.clientWidth, canvasContainer.clientHeight);
 
-  // ── Game loop (created here, started after the main menu completes) ──
+  // ── Game loop (started when the player enters from the world map) ──
   const lastFrameMs = { value: performance.now() };
-  const gameLoop = createGameLoop({
+  gameLoop = createGameLoop({
     appState,
     cc,
     particles,
@@ -344,22 +375,13 @@ export async function startApp(): Promise<void> {
 
   // ── Main menu ──
   // Shown before gameplay. When the player connects the wire to "Start Game",
-  // onStartGame() is called, the menu flies off, the RPG elements are revealed,
-  // and the full game loop begins.
+  // onStartGame() is called, the menu flies off, and the World Map is shown.
+  // The RPG game only starts when the player launches a level from the World Map.
   const mainMenu = createMainMenu(() => {
     cancelAnimationFrame(bgAnimRafId);
     // The main menu component self-cleans (ResizeObserver, wires, RAF) at the end
     // of the start-game fly-up animation before calling this callback.
-    // All that remains is to reveal the RPG gameplay elements and start the game loop.
-
-    // Reveal the RPG gameplay elements and start the game loop.
-    rpgContainer.style.display = '';
-    rpgRender.statsPanel.style.display = '';   // clear the inline 'none' — CSS 'flex' takes over
-    rpgRender.setActive(true);
-    rpgRender.resize(rpgContainer);
-
-    lastFrameMs.value = performance.now();
-    requestAnimationFrame(gameLoop);
+    worldMapScreen.show();
   });
   root.appendChild(mainMenu.element);
 }

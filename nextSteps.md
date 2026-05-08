@@ -2,42 +2,78 @@
 
 ---
 
-## World Map System (newly added)
+## World Map First-Play Experience (new in this session)
 
-### What was implemented
-- `src/types/worldMapTypes.ts` — Full TypeScript interfaces for all world map types
-- `src/data/worldMapData.ts` — All 11 worlds with 10 mandatory levels + 6 Base6 optional challenges each
-- `src/systems/worldMapProgression.ts` — Progression state (unlock/complete logic, serialization helpers)
-- `src/ui/world-map/WorldMapScreen.ts` — Full-screen canvas + DOM overlay
-  - Spiral path connecting 11 world nodes, color-coded states, boss rings, click-to-select
-  - Detail panel: world info, mandatory level list, Base6 challenge list, Start button
-  - DEV mode toggle (right-click levels to mark complete for testing)
-- `src/styles/world-map.css` — World map CSS using existing palette
-- Integration: `🗺 Map` button added to RPG view next to `⚔ Menu`
+### What was completed
+- **Navigation flow**: `Start Game` now opens the **World Map** first, not the RPG arena directly.
+  - `game-app.ts` shows `worldMapScreen` in the `onStartGame` callback instead of the RPG container.
+  - RPG container and stats bar remain hidden until a level is launched from the world map.
+- **"← Main Menu" button** on the World Map header replaces the generic back button when the map is the entry point. Clicking it auto-saves persistent progress and reloads the page (resets to main menu cleanly).
+- **World Map particle simulation** — real-time animated particle system for the world map canvas:
+  - `src/render/world-map/worldMapParticles.ts` — new module.
+  - 1000 particles (default/full quality), 500 reduced, 250 low.
+  - Particles spiral inward from the outer white-hole edge toward the central black hole.
+  - Zone-based color transitions: pale sand → silver → gold (outer) → quartz/cyan → ruby → sunstone → emerald → sapphire → violet → diamond (inner).
+  - Angular speed increases near center (conservation-of-momentum feel).
+  - Each particle shimmers/glints with individual phase/speed variation.
+  - Black hole at center: gravitational gradient + dark core + event-horizon ring.
+  - White hole at outer edge: soft luminous glow along the outer boundary.
+  - Particles fade out near the black hole and reappear at the white hole.
+  - Simulation pauses when the world map is hidden.
+- **Continuous RAF animation loop** in `WorldMapScreen.ts`:
+  - `startAnimLoop()` / `stopAnimLoop()` manage the animation frame.
+  - `drawMap()` is now called every frame (particles need continuous redraw).
+  - ResizeObserver re-initializes particle positions when dimensions change.
+  - `setParticleQuality()` method allows runtime quality switching.
+- **RPG Menu navigation** — two new buttons added to the ⚔ Menu → Menu tab:
+  - **🗺 Back to World Map** — shows an inline confirmation ("Progress in this level will be lost. Are you sure?") with Cancel / Confirm buttons.
+  - **🏠 Back to Main Menu** — same inline confirmation flow.
+  - Both buttons defined in `rpg-menu-tab.ts` via `RpgMenuNavCallbacks` interface.
+  - CSS styles added to `panels.css` (`.rpg-menu__nav-section`, `.rpg-menu__nav-btn`, `--danger`, `--confirm`, `.rpg-menu__nav-warning`).
+- **RPG menu panel** now accepts `navCallbacks?: RpgMenuNavCallbacks` as a 4th parameter in both `createRpgMenuPanel` and `createRpgMenuTabPane`.
+- **Game loop control**: `createGameLoop` in `app-game-loop.ts` now returns a `{ start, stop, isRunning }` object instead of a bare function. The game loop can be paused/resumed without recreating it.
+- **Forward-reference pattern** in `game-app.ts`: all navigation helpers (`showWorldMap`, `goToMainMenu`) are defined before the objects they reference, using JavaScript closure semantics. No double-creation of any panel.
+- **Level screen "Back" button** now returns to the World Map instead of just closing.
+- **Build passes**: `npm run typecheck` and `npm run build` both succeed with zero errors.
 
-### What needs real gameplay integration
-- `startWorldLevel()` and `startOptionalChallenge()` are placeholders — wire to level launcher
-- `serializeWorldMapState()` / `deserializeWorldMapState()` are ready — add to `saveGame()` / `loadGame()`
-- Progression resets on reload until save integration is complete
+### What was partially completed
+- **"Enter Game" / "Play Level" from World Map**: the Level Screen still shows "Play Level (Coming Soon)". The world map shows level details and the level screen previews level layout, but the bridge from "Play Level" to actual RPG gameplay (starting `gameLoop` from the world map detail screen) is not yet wired.
+  - The RPG arena is still accessible via the existing game flow (level launched from world map → level screen → coming-soon play button). The full bridge requires wiring `levelScreen`'s play button to `hideWorldMapAndStartGame()`.
+- **Save/load for world map progression**: `serializeWorldMapState` / `deserializeWorldMapState` helpers exist in `worldMapProgression.ts` but are not yet integrated into `saveGame` / `loadGame`. World map progression resets on reload.
 
-### Unlock chain
-| World | Unlocked By |
-|-------|-------------|
-| Origin Nexus | Start of game |
-| Arithmetic Sands | on_10 (The Blank Variable) |
-| Fraction Fen | as_10 (The Sum Titan) |
-| Algebra Grove | ff_10 (The Denominator Hydra) |
-| Geometry Peaks | ag_10 (The Balance Warden) |
-| Coordinate City | gp_10 (The Polygon Monarch) |
-| Calculus Falls | cc_10 (The Cartesian Engine) |
-| Probability Gardens | cf_10 (The Derivative Leviathan) |
-| Matrix Bastion | pg_10 (The Chance Matriarch) |
-| Fractal Expanse | mb_10 (The Array General) |
-| Eigen Citadel | fe_10 (The Recursive Seraph) |
+### What still needs work
+1. **Wire "Play Level" button** in `LevelScreen.ts` to start the RPG game loop. Remove the "Coming Soon" disabled state once the bridge logic is in place.
+2. **Integrate world map save/load** — call `serializeWorldMapState` in `saveGame()` and `deserializeWorldMapState` in `loadGame()` so completed/unlocked levels persist.
+3. **Particle quality from settings** — expose a world map particle quality dropdown in the Settings panel. Call `worldMapScreen.setParticleQuality(q)` from the settings change handler.
+4. **Black hole visual polish** — the current black hole is a radial gradient. A more dramatic ring/accretion disk effect would be visually striking.
+5. **Dedicated "Enter Campaign" button** on the world map for players who want to jump directly into the RPG arena without selecting a specific level first.
+6. **Level node granularity on the map** — currently the map shows 11 world nodes; adding individual level nodes along the spiral for each world's 10 mandatory levels + 6 challenges would complete the "1000-level spiral" visual concept.
+7. **Tooltip on hover** — show a tooltip or info panel when hovering over a level/world node.
+8. **World map resize edge case** — when the world map is resized while hidden, the particle system reinitializes but the first frame after re-show may flicker. A guard against zero-size canvas would help.
 
-Base 6 challenges unlock after mandatory level 5 of each world is completed.
+### Important architectural notes
+- **Forward-reference pattern**: `worldMapScreen` and `gameLoop` are declared with `let = null!` before the navigation helpers that reference them, then assigned later. This is safe because the helpers are only called at user-interaction time (after all setup completes). TypeScript is satisfied via the `!` definite assignment assertion.
+- **Game loop control**: the new `GameLoop.stop()` must be called before showing the world map (or main menu). Forgetting this would leave the RPG game loop running while the world map is displayed, causing invisible wasted CPU.
+- **Main menu re-entry**: `goToMainMenu()` calls `window.location.reload()` after auto-saving. This is intentional — the main menu's fly-off animation and RAF teardown make in-place re-entry complex. A future session could implement a true `mainMenu.reset()` path if desired.
+- **Particle simulation independence**: the particle simulation in `worldMapParticles.ts` has no knowledge of the world map data model. It uses only canvas geometry (center, maxRadius). This keeps it clean and reusable.
+
+### Performance concerns
+- 1000 particles at 60fps with per-particle glow passes may be heavy on low-end mobile. The quality tiers (full/reduced/low) mitigate this, but quality auto-detection (based on frame rate) is not yet implemented.
+- The glow pass in `worldMapParticles.ts` runs for every particle where `shimmer > 0.8` (roughly ~20% of particles per frame). This could be reduced further with a `reduceGlow` flag.
+- `drawMap()` is called every frame even when particles haven't changed significantly. A dirty-flag optimization (only redraw when particle state changes meaningfully) would reduce overdraw.
+
+### Files to inspect first in a future session
+- `src/app/game-app.ts` — bootstrap and navigation wiring (all screen transitions live here)
+- `src/app/app-game-loop.ts` — game loop with stop/start control
+- `src/ui/world-map/WorldMapScreen.ts` — world map with particle integration and animation loop
+- `src/render/world-map/worldMapParticles.ts` — particle simulation (new)
+- `src/ui/panels/rpg-menu-tab.ts` — Back to World Map / Back to Main Menu confirmation flow
+- `src/ui/panels/rpg-menu-panel.ts` — passes `navCallbacks` through to tab pane
+- `src/styles/panels.css` — nav button styles (at end of file)
 
 ---
+
+
 
 ## What was implemented
 
