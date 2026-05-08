@@ -605,6 +605,19 @@
 - Covers: angle/position update (counter-clockwise, ORBIT_PROJ_SPEED_RAD), distance-gated trail, per-enemy hit cooldown advancement, and collision detection vs. all enemy types + boss.
 - `rpg-render.ts` owns `orbitProjectileCtx: OrbitProjectileCtx` and passes `orbitProjectile` (nullable) each frame.
 
+### src/render/rpg/rpg-weapon-orbit-update.ts
+- Per-frame update logic for equipped-weapon visual orbit particles (~65 lines).
+- Extracted from `rpg-render.ts` to centralise orbit-particle update beside its draw counterpart in `rpg-entity-draw.ts`.
+- Exports `updateWeaponOrbitParticles(weaponOrbitParticles, mote, deltaMs)` — advances each particle's angle, applies even-spacing correction, updates its ring-buffer trail.
+- Imports `WeaponOrbitParticle` from `./rpg-types`; all constants from `./rpg-constants`.
+- Precomputes `MIN_TRAIL_DISTANCE_SQ` at module level (avoids a sqrt in the hot loop).
+
+### src/render/rpg/rpg-player-damage.ts
+- Player hit / iframes logic extracted from `rpg-render.ts` (~95 lines).
+- Exports `PlayerDamageCtx` interface, `dealDamageToPlayer(ctx, atkValue)`, and `dealDamageToPlayerKnockback(ctx, atkValue, normDirX, normDirY)`.
+- `PlayerDamageCtx` carries `mote` (position + velocity), `playerStats`, getter/setter for `playerIFramesMs`, and `spawnDamageNumber` callback.
+- `rpg-render.ts` builds `playerDamageCtx` once and delegates both functions via thin wrappers that match the `RpgEnemyCtx.dealDamageToPlayer` / `dealDamageToPlayerKnockback` signatures.
+
 ### src/render/rpg/rpg-input.ts
 - Pointer and keyboard input handling for the RPG tab (~140 lines).
 - Extracted from `rpg-render.ts` to isolate input translation from game logic.
