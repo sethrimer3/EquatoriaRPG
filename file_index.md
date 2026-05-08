@@ -68,9 +68,10 @@
 - `updateVisiblePanels()` — refreshes the currently active panel.
 
 ### src/app/app-game-loop.ts
-- `createGameLoop()` factory — creates the frame-by-frame game loop.
-- `GameLoopContext` interface — all dependencies injected.
+- `createGameLoop()` factory — creates the frame-by-frame game loop with start/stop control.
+- Returns `GameLoop { start(), stop(), isRunning }` instead of a bare function.
 - Loop: sim tick → particle update → background → render → UI update → auto-save.
+- `stop()` cancels the pending RAF; `start()` resumes from current time.
 
 ### src/data/tiers/tier-definitions.ts
 - Single source of truth for all 11 gemstone tiers (Sand through Nullstone).
@@ -751,10 +752,13 @@
 - `setVisible(visible)` — toggles the overlay.
 
 ### src/ui/panels/rpg-menu-tab.ts
-- Menu sub-tab pane for the RPG overlay panel (auto-move toggle + respawn-wave checkpoint selector + dev wave jump).
-- `RpgMenuTabPane` interface; `createRpgMenuTabPane(dispatch, onAutoMoveChange)` factory.
-- Exposes `isAutoMoveEnabled` (writable) updated immediately on checkbox change; parent reads it via `onAutoMoveChange` callback.
-- `update(rpgState, isDevMode?)` rebuilds content from current state. When `isDevMode=true`, shows a "Dev: Jump to Wave" section with a wave selector (Wave 1, 10, 20, … 1000) and Jump button that dispatches `dev_jump_wave`.
+- Menu sub-tab pane for the RPG overlay panel (auto-move toggle + respawn-wave checkpoint selector + dev wave jump + nav buttons).
+- `RpgMenuTabPane` interface; `createRpgMenuTabPane(dispatch, onAutoMoveChange, onRpgBarAtTopChange, navCallbacks?)` factory.
+- `RpgMenuNavCallbacks` interface: `{ onBackToWorldMap?, onBackToMainMenu? }`.
+- Nav buttons show an inline confirmation: "Progress in this level will be lost. Are you sure?" with Cancel / Confirm.
+- Cancel restores nav buttons; Confirm calls the nav callback.
+- Exposes `isAutoMoveEnabled` (writable) updated immediately on checkbox change.
+- `update(rpgState, isDevMode?)` rebuilds content from current state. When `isDevMode=true`, shows a "Dev: Jump to Wave" section.
 
 ### src/ui/panels/rpg-weapons-tab.ts
 - Weapons sub-tab pane for the RPG overlay panel (weapon purchase / equip / unequip / tier-upgrade cards).
@@ -972,10 +976,26 @@ Audio system — eight focused modules:
 
 ### src/ui/world-map/WorldMapScreen.ts
 - Full-screen world map overlay. Canvas spiral map on the left; DOM detail panel on the right.
-- Exports: `createWorldMapScreen(onClose, initialState): WorldMapScreen`, interface `WorldMapScreen { element, show(), hide(), refresh(state) }`.
-- Canvas rendering: 11 colored world nodes + curved paths, selected node highlight, boss rings, chapter numbers. No per-frame animation loop — redraws on interaction and resize only.
+- Exports: `createWorldMapScreen(onClose, initialState, onMainMenu?): WorldMapScreen`.
+- Interface: `WorldMapScreen { element, show(), hide(), refresh(state), setParticleQuality(q), destroy() }`.
+- Continuous RAF animation loop drives the particle simulation when visible (`startAnimLoop`/`stopAnimLoop`).
+- `drawMap()` called every frame: clears canvas → particle draw → path lines → world nodes → text labels.
+- Canvas rendering: 11 colored world nodes + curved paths, selected node highlight, boss rings, chapter numbers.
 - Detail panel: world name/subtitle/theme/reward, mandatory level list with lock icons, Base6 challenge list, Start button, boss info card.
 - DEV mode: toggle unlocks all worlds for testing; right-click levels to mark complete.
+- Back button shows "← Main Menu" and calls `onMainMenu` when provided.
+- Particle system is paused (setActive false) when the map is hidden.
+
+### src/render/world-map/worldMapParticles.ts
+- Real-time spiral particle simulation for the World Map canvas background.
+- Exports: `createWorldMapParticles(quality?): WorldMapParticles`, `PARTICLE_COUNTS`, `ParticleQuality` type.
+- 1000 / 500 / 250 particles (full / reduced / low quality).
+- Particles orbit the canvas center with inward drift; angular speed increases near center.
+- Colors interpolate across 11 zone RGB stops (outer pale → inner diamond/violet).
+- Black hole: gravitational gradient + dark core + event-horizon ring at center.
+- White hole: soft glow ring at outer boundary; particles reborn here when they reach the black hole.
+- Shimmer: per-particle phase/speed; occasional glow pass for highly-shimmering particles.
+- No per-frame allocation: all particles pre-allocated in an array, reborn in-place.
 
 ### src/styles/world-map.css
 - Styles for the world map screen overlay.

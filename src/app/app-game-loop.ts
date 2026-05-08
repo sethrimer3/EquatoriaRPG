@@ -29,8 +29,20 @@ export interface GameLoopContext {
 
 // ─── Game loop ──────────────────────────────────────────────────
 
-export function createGameLoop(ctx: GameLoopContext): (nowMs: number) => void {
+export interface GameLoop {
+  /** Start (or resume) the loop. Safe to call if already running. */
+  start(): void;
+  /** Pause the loop. Can be resumed with start(). */
+  stop(): void;
+  readonly isRunning: boolean;
+}
+
+export function createGameLoop(ctx: GameLoopContext): GameLoop {
+  let rafId = 0;
+  let running = false;
+
   function gameLoop(nowMs: number): void {
+    if (!running) return;
     const deltaMs = Math.min(nowMs - ctx.lastFrameMs.value, 200);
     ctx.lastFrameMs.value = nowMs;
 
@@ -103,8 +115,21 @@ export function createGameLoop(ctx: GameLoopContext): (nowMs: number) => void {
       );
     }
 
-    requestAnimationFrame(gameLoop);
+    rafId = requestAnimationFrame(gameLoop);
   }
 
-  return gameLoop;
+  return {
+    start(): void {
+      if (running) return;
+      running = true;
+      ctx.lastFrameMs.value = performance.now();
+      rafId = requestAnimationFrame(gameLoop);
+    },
+    stop(): void {
+      running = false;
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    },
+    get isRunning() { return running; },
+  };
 }
