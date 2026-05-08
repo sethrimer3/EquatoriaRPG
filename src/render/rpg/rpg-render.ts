@@ -182,8 +182,8 @@ import {
 import { createRpgInput } from './rpg-input';
 import { updateWeaponOrbitParticles } from './rpg-weapon-orbit-update';
 import {
-  dealDamageToPlayer as _dealDamageToPlayer,
-  dealDamageToPlayerKnockback as _dealDamageToPlayerKnockback,
+  dealDamageToPlayer as dealDamageToPlayerImpl,
+  dealDamageToPlayerKnockback as dealDamageToPlayerKnockbackImpl,
   type PlayerDamageCtx,
 } from './rpg-player-damage';
 
@@ -912,10 +912,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
   /** Flag set at the start of each update() call; drives auto-move logic. */
   let _autoMoveEnabled = false;
 
-  /** Updates all equipped-weapon visual orbit particles. */
-  function updateWeaponOrbitParticlesLocal(deltaMs: number): void {
-    updateWeaponOrbitParticles(weaponOrbitParticles, mote, deltaMs);
-  }
+
 
   // ── Player damage context (wired to rpg-player-damage.ts) ─────────────
   const playerDamageCtx: PlayerDamageCtx = {
@@ -931,7 +928,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
    * to playerStats.def.  Delegates to rpg-player-damage.ts.
    */
   function dealDamageToPlayer(atkValue: number): void {
-    _dealDamageToPlayer(playerDamageCtx, atkValue);
+    dealDamageToPlayerImpl(playerDamageCtx, atkValue);
   }
 
   /**
@@ -939,7 +936,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
    * Used exclusively by Amber shards.  Delegates to rpg-player-damage.ts.
    */
   function dealDamageToPlayerKnockback(atkValue: number, normDirX: number, normDirY: number): void {
-    _dealDamageToPlayerKnockback(playerDamageCtx, atkValue, normDirX, normDirY);
+    dealDamageToPlayerKnockbackImpl(playerDamageCtx, atkValue, normDirX, normDirY);
   }
 
   // ── Enemy update context (shared reference object for rpg-enemy-updates) ──
@@ -1302,7 +1299,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
         updateBossProjectiles(bossProjectiles, bossCtx, deltaMs);
       }
       updateTeleportParticles(teleportParticles, deltaMs);
-      updateWeaponOrbitParticlesLocal(deltaMs);
+      updateWeaponOrbitParticles(weaponOrbitParticles, mote, deltaMs);
       updateOrbitProjectile(orbitProjectileCtx, orbitProjectile, deltaMs);
       statsPanel.withDamageSource(findEquippedWeaponIdByEffect('gatling'), () => weaponSystems.updateSandProjectiles(deltaMs));
       // Update chain whip for all equipped chainWhip weapons
