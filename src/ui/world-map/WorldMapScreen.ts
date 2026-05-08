@@ -17,19 +17,14 @@
  */
 
 import type { WorldId, WorldMapProgressionState } from '../../types/worldMapTypes';
-import {
-  getWorldUnlockState,
-  getLevelUnlockState,
-  isBase6LevelUnlocked,
-  startWorldLevel,
-  startOptionalChallenge,
-  markLevelComplete,
-} from '../../systems/worldMapProgression';
+import { getWorldUnlockState } from '../../systems/worldMapProgression';
 import { WORLD_MAP_DATA } from '../../data/worldMapData';
 import {
   createWorldMapParticles,
   type ParticleQuality,
 } from '../../render/world-map/worldMapParticles';
+import { lerpColor, lighten, darken } from './world-map-color-utils';
+import { renderDetailPanel as renderDetailPanelImpl, type DetailPanelCtx } from './world-map-detail-panel';
 
 // ─── Public interface ─────────────────────────────────────────────
 
@@ -335,220 +330,16 @@ export function createWorldMapScreen(
   // ─── Detail panel rendering ──────────────────────────────────────
 
   function renderDetailPanel(): void {
-    detailPanel.innerHTML = '';
-
-    if (!selectedWorldId) {
-      const empty = document.createElement('div');
-      empty.className = 'wm-detail-empty';
-      empty.textContent = 'Select a world node on the map to see its details.';
-      detailPanel.appendChild(empty);
-      return;
-    }
-
-    const worldData = WORLD_MAP_DATA.find(w => w.id === selectedWorldId);
-    if (!worldData) return;
-
-    const worldUnlockState = getWorldUnlockState(state, selectedWorldId);
-    const isLocked = worldUnlockState === 'locked';
-
-    const content = document.createElement('div');
-    content.className = 'wm-detail-content';
-    detailPanel.appendChild(content);
-
-    // ── World header ──
-    const worldHeader = document.createElement('div');
-    worldHeader.className = 'wm-world-header';
-
-    const chapterEl = document.createElement('div');
-    chapterEl.className = 'wm-world-chapter';
-    chapterEl.textContent = `Chapter ${worldData.chapter}`;
-
-    const titleEl2 = document.createElement('div');
-    titleEl2.className = 'wm-world-title';
-    titleEl2.textContent = worldData.name;
-
-    const subtitleEl = document.createElement('div');
-    subtitleEl.className = 'wm-world-subtitle';
-    subtitleEl.textContent = worldData.subtitle;
-
-    worldHeader.appendChild(chapterEl);
-    worldHeader.appendChild(titleEl2);
-    worldHeader.appendChild(subtitleEl);
-    content.appendChild(worldHeader);
-
-    if (isLocked) {
-      const lockedNotice = document.createElement('div');
-      lockedNotice.className = 'wm-locked-notice';
-      const lockedTitle = document.createElement('strong');
-      lockedTitle.textContent = '🔒 World Locked';
-      lockedNotice.appendChild(lockedTitle);
-      lockedNotice.appendChild(document.createTextNode(
-        `Complete the previous world's boss to unlock ${worldData.name}.`,
-      ));
-      content.appendChild(lockedNotice);
-      return;
-    }
-
-    // ── Theme ──
-    const themeEl = document.createElement('div');
-    themeEl.className = 'wm-world-theme';
-    themeEl.textContent = worldData.theme;
-    content.appendChild(themeEl);
-
-    // ── Reward ──
-    const rewardEl = document.createElement('div');
-    rewardEl.className = 'wm-world-reward';
-    rewardEl.textContent = worldData.reward;
-    content.appendChild(rewardEl);
-
-    // ── Mandatory levels ──
-    const mandatorySection = document.createElement('div');
-
-    const mandatorySectionTitle = document.createElement('div');
-    mandatorySectionTitle.className = 'wm-section-title';
-    mandatorySectionTitle.textContent = 'Levels';
-    mandatorySection.appendChild(mandatorySectionTitle);
-
-    const mandatoryList = document.createElement('div');
-    mandatoryList.className = 'wm-level-list';
-
-    for (const level of worldData.mandatoryLevels) {
-      const levelState = getLevelUnlockState(state, selectedWorldId, level.id);
-      const item = document.createElement('div');
-      item.className = `wm-level-item wm-level-item--${levelState}`;
-      if (level.type === 'boss') item.classList.add('wm-level-item--boss');
-
-      const icon = document.createElement('span');
-      icon.className = 'wm-level-icon';
-      icon.textContent = levelStateIcon(levelState, level.type === 'boss');
-
-      const name = document.createElement('span');
-      name.className = 'wm-level-name';
-      name.textContent = level.name;
-
-      const num = document.createElement('span');
-      num.className = 'wm-level-number';
-      num.textContent = level.type === 'boss' ? 'BOSS' : `${level.number}`;
-
-      item.appendChild(icon);
-      item.appendChild(name);
-      item.appendChild(num);
-
-      // Click to start an unlocked/current level
-      if (levelState === 'unlocked' || levelState === 'current') {
-        const capturedWorldId = selectedWorldId;
-        if (capturedWorldId !== null) {
-          item.title = `Start: ${level.name}`;
-          item.addEventListener('click', () => {
-            startWorldLevel(capturedWorldId, level.id);
-          });
-
-          // DEV: right-click marks complete for testing
-          if (state.devMode) {
-            item.title += ' (right-click → mark complete)';
-            item.addEventListener('contextmenu', (e) => {
-              e.preventDefault();
-              markLevelComplete(state, capturedWorldId, level.id);
-              drawMap();
-              renderDetailPanel();
-            });
-          }
-        }
-      }
-
-      mandatoryList.appendChild(item);
-
-      // Boss info card beneath boss level
-      if (level.type === 'boss' && level.bossName && levelState !== 'locked') {
-        const bossCard = document.createElement('div');
-        bossCard.className = 'wm-boss-info';
-
-        const bossName = document.createElement('div');
-        bossName.className = 'wm-boss-name';
-        bossName.textContent = `☠ ${level.bossName}`;
-        bossCard.appendChild(bossName);
-
-        if (level.bossDescription) {
-          const bossDesc = document.createElement('div');
-          bossDesc.className = 'wm-boss-desc';
-          bossDesc.textContent = level.bossDescription;
-          bossCard.appendChild(bossDesc);
-        }
-
-        mandatoryList.appendChild(bossCard);
-      }
-    }
-
-    mandatorySection.appendChild(mandatoryList);
-    content.appendChild(mandatorySection);
-
-    // ── Base6 challenges ──
-    const base6Section = document.createElement('div');
-
-    const base6SectionTitle = document.createElement('div');
-    base6SectionTitle.className = 'wm-section-title';
-    base6SectionTitle.textContent = 'Base 6 Challenges';
-    base6Section.appendChild(base6SectionTitle);
-
-    const base6List = document.createElement('div');
-    base6List.className = 'wm-level-list';
-
-    for (const challenge of worldData.base6Set) {
-      const unlocked = isBase6LevelUnlocked(state, selectedWorldId, challenge.id);
-      const completed = state.worlds.get(selectedWorldId)?.completedBase6Ids.has(challenge.id) ?? false;
-      const itemState = completed ? 'completed' : unlocked ? 'unlocked' : 'locked';
-
-      const item = document.createElement('div');
-      item.className = `wm-level-item wm-level-item--${itemState}`;
-
-      const icon = document.createElement('span');
-      icon.className = 'wm-level-icon';
-      icon.textContent = itemState === 'completed' ? '✓' : itemState === 'locked' ? '🔒' : '◈';
-
-      const name = document.createElement('span');
-      name.className = 'wm-level-name';
-      name.textContent = `B${challenge.base6Number}`;
-
-      const desc = document.createElement('span');
-      desc.className = 'wm-level-number';
-      desc.textContent = challenge.name.replace('Base 6 Trial: ', '');
-
-      item.appendChild(icon);
-      item.appendChild(name);
-      item.appendChild(desc);
-      item.title = unlocked ? challenge.challengeRule : 'Complete Level 5 to unlock Base 6 challenges.';
-
-      if (itemState === 'unlocked') {
-        const capturedWorldId = selectedWorldId;
-        if (capturedWorldId !== null) {
-          item.addEventListener('click', () => {
-            startOptionalChallenge(capturedWorldId, challenge.id);
-          });
-        }
-      }
-
-      base6List.appendChild(item);
-    }
-
-    base6Section.appendChild(base6List);
-    content.appendChild(base6Section);
-
-    // ── Start current level button ──
-    const worldProgress = state.worlds.get(selectedWorldId);
-    const currentLevelId = worldProgress?.currentMandatoryLevelId;
-    if (currentLevelId && selectedWorldId !== null) {
-      const capturedWorldId = selectedWorldId;
-      const currentLevel = worldData.mandatoryLevels.find(l => l.id === currentLevelId);
-      if (currentLevel) {
-        const startBtn = document.createElement('button');
-        startBtn.className = 'wm-start-btn';
-        startBtn.textContent = `▶ Start: ${currentLevel.name}`;
-        startBtn.addEventListener('click', () => {
-          startWorldLevel(capturedWorldId, currentLevelId);
-        });
-        content.appendChild(startBtn);
-      }
-    }
+    const panelCtx: DetailPanelCtx = {
+      detailPanelEl: detailPanel,
+      selectedWorldId,
+      state,
+      onRefresh(): void {
+        drawMap();
+        renderDetailPanel();
+      },
+    };
+    renderDetailPanelImpl(panelCtx);
   }
 
   // ─── Canvas interaction ──────────────────────────────────────────
@@ -740,55 +531,4 @@ export function createWorldMapScreen(
   return screen;
 }
 
-// ─── Color utility helpers ────────────────────────────────────────
 
-/** Linearly interpolate between two hex colours. */
-function lerpColor(a: string, b: string, t: number): string {
-  const ar = parseInt(a.slice(1, 3), 16);
-  const ag = parseInt(a.slice(3, 5), 16);
-  const ab = parseInt(a.slice(5, 7), 16);
-  const br = parseInt(b.slice(1, 3), 16);
-  const bg = parseInt(b.slice(3, 5), 16);
-  const bb = parseInt(b.slice(5, 7), 16);
-  const r = Math.round(ar + (br - ar) * t);
-  const g = Math.round(ag + (bg - ag) * t);
-  const bv = Math.round(ab + (bb - ab) * t);
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bv.toString(16).padStart(2, '0')}`;
-}
-
-function hexToRgb(hex: string): [number, number, number] {
-  return [
-    parseInt(hex.slice(1, 3), 16),
-    parseInt(hex.slice(3, 5), 16),
-    parseInt(hex.slice(5, 7), 16),
-  ];
-}
-
-function rgbToHex(r: number, g: number, b: number): string {
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-}
-
-function lighten(hex: string, amount: number): string {
-  const [r, g, b] = hexToRgb(hex);
-  return rgbToHex(
-    Math.min(255, Math.round(r + (255 - r) * amount)),
-    Math.min(255, Math.round(g + (255 - g) * amount)),
-    Math.min(255, Math.round(b + (255 - b) * amount)),
-  );
-}
-
-function darken(hex: string, amount: number): string {
-  const [r, g, b] = hexToRgb(hex);
-  return rgbToHex(
-    Math.max(0, Math.round(r * (1 - amount))),
-    Math.max(0, Math.round(g * (1 - amount))),
-    Math.max(0, Math.round(b * (1 - amount))),
-  );
-}
-
-function levelStateIcon(state: string, isBoss: boolean): string {
-  if (state === 'completed') return '✓';
-  if (state === 'current')   return isBoss ? '☠' : '▶';
-  if (state === 'unlocked')  return isBoss ? '⬡' : '○';
-  return '🔒';
-}
