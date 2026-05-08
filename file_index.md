@@ -373,9 +373,17 @@
 - Consumed by: `rpg-render.ts`, `rpg-factories.ts`, `rpg-entity-draw.ts`, `rpg-enemy-draw.ts`, `rpg-enemy-updates.ts`, `rpg-enemy-updates-adv.ts`, `rpg-damage.ts`, `rpg-boss-draw.ts`, `rpg-boss-update.ts`, `rpg-lucky-motes.ts`.
 
 ### src/render/rpg/rpg-factories.ts
-- `make*` factory functions for every RPG entity type (~398 lines).
-- Imports constants from `rpg-constants.ts`, types from `rpg-types.ts`, and `getWaveStatScale` from `rpg-state.ts`.
+- `make*` factory functions for every RPG entity type (~500 lines after refactoring).
+- Imports constants from `rpg-constants.ts`, types from `rpg-types.ts`, `getWaveStatScale` from `rpg-state.ts`, and `maybeAttachMathObjective` from `rpg-math-objective-factory.ts`.
 - Exports: `makeAttackTrail`, `makeLaserEnemy`, `makeSapphireEnemy`, `makeSapphireMissile`, `makeEmeraldEnemy`, `makeAmberEnemy`, `makeAmberShard`, `makeVoidEnemy`, `makeQuartzEnemy`, `makeQuartzSpike`, `makeRubyEnemy`, `makeRubyBolt`, `makeSunstoneEnemy`, `makeCitrineEnemy`, `makeCitrineBolt`, `makeIoliteEnemy`, `makeAmethystEnemy`, `makeAmethystShard`, `makeDiamondEnemy`, `makeDiamondShard`, `makeNullstoneEnemy`, `makeVoidTendril`, `makeBossEnemy`.
+
+### src/render/rpg/rpg-math-objective-factory.ts
+- `maybeAttachMathObjective(enemy, waveNumber, accentColor, enemyKind?)` — extracted from `rpg-factories.ts`.
+- Randomly attaches a `mathObjective` to any enemy based on wave tier and per-kind biases.
+- Wave-tier spawn chances: 1–5 → 25%, 6–15 → 30%, 16–30 → 35%, 31+ → 40%.
+- Per-kind biases (applied at wave 31+) for: iolite, diamond, quartz, amethyst, citrine, nullstone, fracteryl, eigenstein, alivened.
+- Pure function — no state, no DOM side effects.
+
 
 ### src/render/rpg/rpg-fluid.ts
 - Euler fluid background simulation for RPG mode.  Ported from Chapter 3 EulerFluidEffect.js in sethrimer3/Thero_Idle_TD.
@@ -604,6 +612,19 @@
 - `OrbitProjectileCtx` carries the player mote, a `bossEnemy` getter, all 17 enemy arrays, `hitEffects` array, 18 per-enemy damage functions, and `spawnDamageNumber` callback.
 - Covers: angle/position update (counter-clockwise, ORBIT_PROJ_SPEED_RAD), distance-gated trail, per-enemy hit cooldown advancement, and collision detection vs. all enemy types + boss.
 - `rpg-render.ts` owns `orbitProjectileCtx: OrbitProjectileCtx` and passes `orbitProjectile` (nullable) each frame.
+
+### src/render/rpg/rpg-weapon-orbit-update.ts
+- Per-frame update logic for equipped-weapon visual orbit particles (~65 lines).
+- Extracted from `rpg-render.ts` to centralise orbit-particle update beside its draw counterpart in `rpg-entity-draw.ts`.
+- Exports `updateWeaponOrbitParticles(weaponOrbitParticles, mote, deltaMs)` — advances each particle's angle, applies even-spacing correction, updates its ring-buffer trail.
+- Imports `WeaponOrbitParticle` from `./rpg-types`; all constants from `./rpg-constants`.
+- Precomputes `MIN_TRAIL_DISTANCE_SQ` at module level (avoids a sqrt in the hot loop).
+
+### src/render/rpg/rpg-player-damage.ts
+- Player hit / iframes logic extracted from `rpg-render.ts` (~95 lines).
+- Exports `PlayerDamageCtx` interface, `dealDamageToPlayer(ctx, atkValue)`, and `dealDamageToPlayerKnockback(ctx, atkValue, normDirX, normDirY)`.
+- `PlayerDamageCtx` carries `mote` (position + velocity), `playerStats`, getter/setter for `playerIFramesMs`, and `spawnDamageNumber` callback.
+- `rpg-render.ts` builds `playerDamageCtx` once and delegates both functions via thin wrappers that match the `RpgEnemyCtx.dealDamageToPlayer` / `dealDamageToPlayerKnockback` signatures.
 
 ### src/render/rpg/rpg-input.ts
 - Pointer and keyboard input handling for the RPG tab (~140 lines).
@@ -981,10 +1002,24 @@ Audio system — eight focused modules:
 - Continuous RAF animation loop drives the particle simulation when visible (`startAnimLoop`/`stopAnimLoop`).
 - `drawMap()` called every frame: clears canvas → particle draw → path lines → world nodes → text labels.
 - Canvas rendering: 11 colored world nodes + curved paths, selected node highlight, boss rings, chapter numbers.
-- Detail panel: world name/subtitle/theme/reward, mandatory level list with lock icons, Base6 challenge list, Start button, boss info card.
+- Detail panel rendering delegated to `world-map-detail-panel.ts`; color utilities from `world-map-color-utils.ts`.
 - DEV mode: toggle unlocks all worlds for testing; right-click levels to mark complete.
 - Back button shows "← Main Menu" and calls `onMainMenu` when provided.
 - Particle system is paused (setActive false) when the map is hidden.
+
+### src/ui/world-map/world-map-detail-panel.ts
+- `renderDetailPanel(ctx: DetailPanelCtx)` — extracted from `WorldMapScreen.ts`.
+- Rebuilds the world detail panel DOM from scratch on each call (replaces `innerHTML`).
+- `DetailPanelCtx` provides: `detailPanelEl`, `selectedWorldId`, `state`, `onRefresh()`.
+- Renders: world header (chapter/name/subtitle), locked notice, theme, reward, mandatory level list (with boss cards), Base6 challenge list, Start button.
+- Handles click → `startWorldLevel` / `startOptionalChallenge`; DEV right-click → `markLevelComplete` + `onRefresh()`.
+- Stateless pure DOM builder; imports `levelStateIcon` from `world-map-color-utils.ts`.
+
+### src/ui/world-map/world-map-color-utils.ts
+- Pure color and icon utilities for the world map — extracted from `WorldMapScreen.ts`.
+- Exports: `lerpColor(a, b, t)`, `lighten(hex, amount)`, `darken(hex, amount)`, `levelStateIcon(state, isBoss)`.
+- No state, no DOM side effects; safe to import from any module.
+
 
 ### src/render/world-map/worldMapParticles.ts
 - Real-time spiral particle simulation for the World Map canvas background.

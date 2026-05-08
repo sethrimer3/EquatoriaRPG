@@ -42,7 +42,6 @@ import { createDamageFns } from './rpg-damage';
 import { createRpgStatsPanel, type RpgStatsPanelHandle } from './rpg-stats-panel';
 import {
   RPG_TRAIL_CAPACITY, RPG_MOTE_SIZE,
-  MIN_TRAIL_DISTANCE,
   PLAYER_HP_INIT, PLAYER_ATK_INIT, PLAYER_DEF_INIT, PLAYER_REGEN_INIT,
   JOYSTICK_OUTER_RADIUS, JOYSTICK_THUMB_RADIUS,
   INTER_WAVE_DELAY_MS, DEATH_ANIM_DURATION_MS, DEATH_HOLD_DURATION_MS, RESTART_FADE_IN_MS,
@@ -50,8 +49,8 @@ import {
   PLAYER_BASE_COOLDOWN_MS, HIT_EFFECT_DURATION_MS,
   BASE_ATTACK_TIMER_KEY, SHOT_LINE_DURATION_MS, TARGET_FRAME_MS,
   DAMAGE_NUM_DURATION_MS, DAMAGE_NUM_MIN_FONT_PX, DAMAGE_NUM_MAX_FONT_PX,
-  DAMAGE_NUM_INITIAL_SPEED, DAMAGE_NUM_DECEL, PLAYER_IFRAME_MIN_MS, PLAYER_IFRAME_MAX_ADD_MS, PLAYER_KNOCKBACK_MAX,
-  WEAPON_PARTICLE_ORBIT_SPEED, WEAPON_PARTICLE_ORBIT_RADIUS, WEAPON_PARTICLE_MIN_SPEED,
+  DAMAGE_NUM_INITIAL_SPEED, DAMAGE_NUM_DECEL,
+  WEAPON_PARTICLE_ORBIT_RADIUS,
   ORBIT_PROJ_RADIUS, ORBIT_PROJ_TRAIL_CAP,
   WEAPON_ORBIT_TRAIL_CAP,
   LASER_ENEMY_SIZE, SAPPHIRE_ENEMY_SIZE,
@@ -181,6 +180,12 @@ import {
   type PlayerMovementState,
 } from './rpg-player-movement';
 import { createRpgInput } from './rpg-input';
+import { updateWeaponOrbitParticles } from './rpg-weapon-orbit-update';
+import {
+  dealDamageToPlayer as dealDamageToPlayerImpl,
+  dealDamageToPlayerKnockback as dealDamageToPlayerKnockbackImpl,
+  type PlayerDamageCtx,
+} from './rpg-player-damage';
 
 // ── Dynamic internal resolution ───────────────────────────────────
 // These are updated by resize() to match the container's client dimensions.
@@ -907,80 +912,31 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
   /** Flag set at the start of each update() call; drives auto-move logic. */
   let _autoMoveEnabled = false;
 
-  /** Updates all equipped-weapon visual orbit particles. */
-  function updateWeaponOrbitParticles(deltaMs: number): void {
-    if (weaponOrbitParticles.length === 0) return;
-    const dt = deltaMs / 1000;
-    const angleStep = weaponOrbitParticles.length > 0 ? (2 * Math.PI) / weaponOrbitParticles.length : 0;
-    for (let idx = 0; idx < weaponOrbitParticles.length; idx++) {
-      const p = weaponOrbitParticles[idx];
-      p.angle += WEAPON_PARTICLE_ORBIT_SPEED * dt;
-      // Keep evenly spaced when multiple weapons are equipped
-      const targetAngle = idx * angleStep + (Date.now() / 1000) * WEAPON_PARTICLE_ORBIT_SPEED;
-      const angleDelta = ((targetAngle - p.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-      p.angle += angleDelta * 0.05;
-      const newX = mote.x + Math.cos(p.angle) * WEAPON_PARTICLE_ORBIT_RADIUS;
-      const newY = mote.y + Math.sin(p.angle) * WEAPON_PARTICLE_ORBIT_RADIUS;
-      const dx = newX - p.x, dy = newY - p.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < WEAPON_PARTICLE_MIN_SPEED * dt) p.angle += 0.05;
-      p.x = newX; p.y = newY;
 
-      // Distance-based trail update for weapon particles to prevent jittering at high refresh rates.
-      const MIN_TRAIL_DISTANCE_SQ = MIN_TRAIL_DISTANCE * MIN_TRAIL_DISTANCE;
-      const lastTrailIdx = (p.trailHead - 1 + WEAPON_ORBIT_TRAIL_CAP) % WEAPON_ORBIT_TRAIL_CAP;
-      const trailDx = p.x - p.trailX[lastTrailIdx];
-      const trailDy = p.y - p.trailY[lastTrailIdx];
-      const trailDistSq = trailDx * trailDx + trailDy * trailDy;
 
-      if (p.trailCount === 0 || trailDistSq >= MIN_TRAIL_DISTANCE_SQ) {
-        p.trailX[p.trailHead] = p.x;
-        p.trailY[p.trailHead] = p.y;
-        p.trailHead = (p.trailHead + 1) % WEAPON_ORBIT_TRAIL_CAP;
-        if (p.trailCount < WEAPON_ORBIT_TRAIL_CAP) p.trailCount++;
-      }
-    }
-  }
+  // ── Player damage context (wired to rpg-player-damage.ts) ─────────────
+  const playerDamageCtx: PlayerDamageCtx = {
+    mote,
+    playerStats,
+    getPlayerIFramesMs: () => playerIFramesMs,
+    setPlayerIFramesMs: (ms) => { playerIFramesMs = ms; },
+    spawnDamageNumber,
+  };
 
   /**
    * Applies raw enemy ATK damage to the player after blocking a percentage equal
-   * to playerStats.def (e.g. def=5 blocks 5 % of incoming damage),
-   * subject to iframes. Mutates playerStats.hp and playerIFramesMs.
+   * to playerStats.def.  Delegates to rpg-player-damage.ts.
    */
   function dealDamageToPlayer(atkValue: number): void {
-    if (playerIFramesMs > 0) return;
-    const dmg = Math.max(0, atkValue * (1 - Math.min(100, playerStats.def) / 100));
-    if (dmg <= 0) {
-      spawnDamageNumber(mote.x, mote.y, 0, -1, 'BLOCKED', 0.25, '#74c0fc');
-    } else {
-      playerStats.hp = Math.max(0, playerStats.hp - dmg);
-      const ratio = Math.min(1, dmg / playerStats.maxHp);
-      playerIFramesMs = PLAYER_IFRAME_MIN_MS + ratio * PLAYER_IFRAME_MAX_ADD_MS;
-      spawnDamageNumber(mote.x, mote.y, 0, -1, String(Math.round(dmg)), ratio, '#ff6666');
-    }
+    dealDamageToPlayerImpl(playerDamageCtx, atkValue);
   }
 
   /**
    * Applies damage to the player with a directional knockback impulse.
-   * Used exclusively by Amber shards which carry velocity-based knockback.
-   * Prefer `dealDamageToPlayer` for all other enemy contact/projectile damage.
-   * @param atkValue - raw attack value (defence percentage applied internally)
-   * @param normDirX - normalised knockback / damage-number direction X
-   * @param normDirY - normalised knockback / damage-number direction Y
+   * Used exclusively by Amber shards.  Delegates to rpg-player-damage.ts.
    */
   function dealDamageToPlayerKnockback(atkValue: number, normDirX: number, normDirY: number): void {
-    if (playerIFramesMs > 0) return;
-    const dmg = Math.max(0, atkValue * (1 - Math.min(100, playerStats.def) / 100));
-    if (dmg <= 0) {
-      spawnDamageNumber(mote.x, mote.y, normDirX, normDirY, 'BLOCKED', 0.25, '#74c0fc');
-    } else {
-      playerStats.hp = Math.max(0, playerStats.hp - dmg);
-      const ratio = Math.min(1, dmg / playerStats.maxHp);
-      mote.vx += normDirX * PLAYER_KNOCKBACK_MAX * ratio;
-      mote.vy += normDirY * PLAYER_KNOCKBACK_MAX * ratio;
-      playerIFramesMs = PLAYER_IFRAME_MIN_MS + ratio * PLAYER_IFRAME_MAX_ADD_MS;
-      spawnDamageNumber(mote.x, mote.y, normDirX, normDirY, String(Math.round(dmg)), ratio, '#ff6666');
-    }
+    dealDamageToPlayerKnockbackImpl(playerDamageCtx, atkValue, normDirX, normDirY);
   }
 
   // ── Enemy update context (shared reference object for rpg-enemy-updates) ──
@@ -1343,7 +1299,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
         updateBossProjectiles(bossProjectiles, bossCtx, deltaMs);
       }
       updateTeleportParticles(teleportParticles, deltaMs);
-      updateWeaponOrbitParticles(deltaMs);
+      updateWeaponOrbitParticles(weaponOrbitParticles, mote, deltaMs);
       updateOrbitProjectile(orbitProjectileCtx, orbitProjectile, deltaMs);
       statsPanel.withDamageSource(findEquippedWeaponIdByEffect('gatling'), () => weaponSystems.updateSandProjectiles(deltaMs));
       // Update chain whip for all equipped chainWhip weapons

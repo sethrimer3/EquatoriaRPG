@@ -167,12 +167,12 @@ export function drawOrbitProjectile(ctx: CanvasRenderingContext2D, op: OrbitProj
       const trailSize = ORBIT_PROJ_SIZE * t * 1.3;
       if (trailSize < 0.3) continue;
       const half = trailSize / 2;
-      ctx.globalAlpha = t * 0.45;
+      ctx.globalAlpha = t * 0.50;
       ctx.shadowBlur = isLowGraphicsMode ? 0 : trailSize * 6; ctx.shadowColor = projGlow; ctx.fillStyle = projGlow;
       const gh = half * 2.2;
       ctx.fillRect(Math.floor(op.trailX[bufIdx] - gh), Math.floor(op.trailY[bufIdx] - gh), Math.ceil(gh * 2), Math.ceil(gh * 2));
       ctx.shadowBlur = 0;
-      ctx.globalAlpha = t * 0.7;
+      ctx.globalAlpha = t * 0.50;
       ctx.fillStyle = projColor;
       ctx.fillRect(Math.floor(op.trailX[bufIdx] - half), Math.floor(op.trailY[bufIdx] - half), Math.ceil(trailSize), Math.ceil(trailSize));
     }
@@ -239,14 +239,14 @@ export function drawEmeraldPlayerMissiles(
         if (trailSize < 0.2) continue;
         const half = trailSize / 2;
         // Outer glow layer (glow radius reduced 25%).
-        ctx.globalAlpha = t * 0.5 * baseAlpha;
+        ctx.globalAlpha = t * 0.50 * baseAlpha;
         ctx.shadowBlur  = trailSize * 5.25; ctx.shadowColor = EMERALD_MISSILE_GLOW;
         ctx.fillStyle   = EMERALD_MISSILE_GLOW;
         const gh = half * 1.875;
         ctx.fillRect(Math.floor(m.trailX[bufIdx] - gh), Math.floor(m.trailY[bufIdx] - gh), Math.ceil(gh * 2), Math.ceil(gh * 2));
         ctx.shadowBlur = 0;
         // Inner core layer.
-        ctx.globalAlpha = t * 0.75 * baseAlpha;
+        ctx.globalAlpha = t * 0.50 * baseAlpha;
         ctx.fillStyle   = EMERALD_MISSILE_COLOR;
         ctx.fillRect(Math.floor(m.trailX[bufIdx] - half), Math.floor(m.trailY[bufIdx] - half), Math.ceil(trailSize), Math.ceil(trailSize));
       }
@@ -291,13 +291,13 @@ export function drawEmeraldSubMissiles(
         const trailSize = EMERALD_SUB_MISSILE_SIZE * t * 1.6;
         if (trailSize < 0.15) continue;
         const half = trailSize / 2;
-        ctx.globalAlpha = t * 0.45 * baseAlpha;
+        ctx.globalAlpha = t * 0.50 * baseAlpha;
         ctx.shadowBlur  = trailSize * 5; ctx.shadowColor = EMERALD_MISSILE_GLOW;
         ctx.fillStyle   = EMERALD_MISSILE_GLOW;
         const gh = half * 1.8;
         ctx.fillRect(Math.floor(s.trailX[bufIdx] - gh), Math.floor(s.trailY[bufIdx] - gh), Math.ceil(gh * 2), Math.ceil(gh * 2));
         ctx.shadowBlur = 0;
-        ctx.globalAlpha = t * 0.65 * baseAlpha;
+        ctx.globalAlpha = t * 0.50 * baseAlpha;
         ctx.fillStyle   = EMERALD_MISSILE_COLOR;
         ctx.fillRect(Math.floor(s.trailX[bufIdx] - half), Math.floor(s.trailY[bufIdx] - half), Math.ceil(trailSize), Math.ceil(trailSize));
       }
@@ -494,12 +494,12 @@ export function drawPlayerMote(
       const trailSize = RPG_MOTE_SIZE * t * 1.3;
       if (trailSize < 0.3) continue;
       const half = trailSize / 2;
-      ctx.globalAlpha = t * 0.45;
+      ctx.globalAlpha = t * 0.30;
       ctx.shadowBlur  = trailSize * 6; ctx.shadowColor = RPG_MOTE_GLOW; ctx.fillStyle = RPG_MOTE_GLOW;
       const gh = half * 2.2;
       ctx.fillRect(Math.floor(mote.trailX[bufIdx] - gh), Math.floor(mote.trailY[bufIdx] - gh), Math.ceil(gh * 2), Math.ceil(gh * 2));
       ctx.shadowBlur = 0;
-      ctx.globalAlpha = t * 0.7;
+      ctx.globalAlpha = t * 0.30;
       ctx.fillStyle   = RPG_MOTE_COLOR;
       ctx.fillRect(Math.floor(mote.trailX[bufIdx] - half), Math.floor(mote.trailY[bufIdx] - half), Math.ceil(trailSize), Math.ceil(trailSize));
     }
