@@ -219,13 +219,12 @@ export function createWorldMapScreen(
 
     if (nodes.length === 0) return;
 
-    // Canvas center and max radius for particle system
-    const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
-    const cxPx = (canvasArea.clientWidth / 2) * dpr;
-    const cyPx = (canvasArea.clientHeight / 2) * dpr;
+    // Use CSS pixel space (matches ctx DPR transform).
+    const cxCSS = canvasArea.clientWidth / 2;
+    const cyCSS = canvasArea.clientHeight / 2;
 
     // ── Draw particle simulation (below paths and nodes) ──
-    particleSys.draw(ctx, cxPx, cyPx);
+    particleSys.draw(ctx, cxCSS, cyCSS);
 
     // ── Draw paths between worlds (order follows the spiral) ──
     for (let i = 0; i < nodes.length - 1; i++) {
@@ -616,8 +615,13 @@ export function createWorldMapScreen(
 
   let resizeRafId = 0;
 
+  /** Maximum time delta clamped per frame to guard against tab-switch gaps. */
+  const MAX_FRAME_DELTA_MS = 200;
+
   function resize(): void {
     const { width, height } = canvasArea.getBoundingClientRect();
+    // Guard against zero-dimension layouts (e.g., hidden tabs) that would cause
+    // invalid canvas state and divide-by-zero in particle radius calculations.
     if (width === 0 || height === 0) return;
     const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
     canvas.width = Math.round(width * dpr);
@@ -628,11 +632,12 @@ export function createWorldMapScreen(
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
     buildNodes();
-    // Re-initialize particles for new dimensions
-    const cxPx = width / 2;
-    const cyPx = height / 2;
-    const maxR = Math.min(cxPx, cyPx) * 0.92;
-    particleSys.resize(cxPx * dpr, cyPx * dpr, maxR * dpr);
+    // Re-initialize particles. Use CSS pixel space — the ctx DPR transform means
+    // all drawing coordinates are in CSS pixels, so particles must be too.
+    const cxCSS = width / 2;
+    const cyCSS = height / 2;
+    const maxR = Math.min(cxCSS, cyCSS) * 0.92;
+    particleSys.resize(cxCSS, cyCSS, maxR);
     drawMap();
   }
 
@@ -646,15 +651,16 @@ export function createWorldMapScreen(
 
   function animFrame(nowMs: number): void {
     if (!isVisible) return;
-    const dtMs = Math.min(nowMs - lastFrameMs, 200);
+    // Clamp dtMs to avoid runaway simulation after tab switches or debugger pauses.
+    const dtMs = Math.min(nowMs - lastFrameMs, MAX_FRAME_DELTA_MS);
     lastFrameMs = nowMs;
 
-    const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
-    const cxPx = (canvasArea.clientWidth / 2) * dpr;
-    const cyPx = (canvasArea.clientHeight / 2) * dpr;
-    const maxR = Math.min(cxPx, cyPx) * 0.92;
+    // Particle positions are in CSS pixel space (matching the ctx DPR transform).
+    const cxCSS = canvasArea.clientWidth / 2;
+    const cyCSS = canvasArea.clientHeight / 2;
+    const maxR = Math.min(cxCSS, cyCSS) * 0.92;
 
-    particleSys.update(dtMs, cxPx, cyPx, maxR);
+    particleSys.update(dtMs, cxCSS, cyCSS, maxR);
     drawMap();
 
     animRafId = requestAnimationFrame(animFrame);
@@ -722,11 +728,10 @@ export function createWorldMapScreen(
       particleQuality = quality;
       particleSys = createWorldMapParticles(quality);
       if (isVisible) {
-        const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
-        const cxPx = (canvasArea.clientWidth / 2) * dpr;
-        const cyPx = (canvasArea.clientHeight / 2) * dpr;
-        const maxR = Math.min(cxPx, cyPx) * 0.92;
-        particleSys.resize(cxPx, cyPx, maxR);
+        const cxCSS = canvasArea.clientWidth / 2;
+        const cyCSS = canvasArea.clientHeight / 2;
+        const maxR = Math.min(cxCSS, cyCSS) * 0.92;
+        particleSys.resize(cxCSS, cyCSS, maxR);
         particleSys.setActive(true);
       }
     },

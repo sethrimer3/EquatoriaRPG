@@ -35,8 +35,8 @@ function blendZoneColor(t: number): RGB {
   const lo      = Math.floor(scaled);
   const hi      = Math.min(lo + 1, ZONE_COLORS.length - 1);
   const f       = scaled - lo;
-  const a       = ZONE_COLORS[lo]!;
-  const b       = ZONE_COLORS[hi]!;
+  const a       = ZONE_COLORS[lo] as RGB;
+  const b       = ZONE_COLORS[hi] as RGB;
   return [
     a[0] + (b[0] - a[0]) * f,
     a[1] + (b[1] - a[1]) * f,
@@ -172,9 +172,10 @@ export function createWorldMapParticles(quality: ParticleQuality = 'full'): Worl
         continue;
       }
 
-      // Fade in if just reborn
-      if (p.alpha < 0.5 + p.shimmerAmp * 0.5) {
-        p.alpha = Math.min(0.5 + p.shimmerAmp * 0.5, p.alpha + dt * 1.5);
+      // Fade in if just reborn — target alpha is mid-range plus shimmer contribution
+      const targetAlpha = 0.5 + p.shimmerAmp * 0.5;
+      if (p.alpha < targetAlpha) {
+        p.alpha = Math.min(targetAlpha, p.alpha + dt * 1.5);
       }
 
       // Angular speed — faster near center (conservation)

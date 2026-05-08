@@ -319,7 +319,7 @@ export function createRpgMenuTabPane(
 
         const warning = document.createElement('div');
         warning.className = 'rpg-menu__nav-warning';
-        warning.textContent = 'Progress in this level will be lost. Are you sure?';
+        warning.textContent = 'In-level progress will be lost. Persistent upgrades and completed levels are kept. Are you sure?';
         navSection.appendChild(warning);
 
         const btnRow = document.createElement('div');
