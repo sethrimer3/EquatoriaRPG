@@ -236,6 +236,13 @@ export interface RpgRender {
    */
   setWaveEnemyBias(bias: Partial<Record<string, number>>): void;
   /**
+   * Set the wave base level offset for enemy HP/ATK/DEF scaling.
+   * The effective wave number is `currentWave + waveBaseLevel`, so later
+   * campaign worlds spawn harder enemies even on early waves.
+   * Pass 0 (or omit) for no offset.  Reset automatically on setActive(false).
+   */
+  setWaveBaseLevel(baseLevel: number): void;
+  /**
    * Set the display name of the current level.  The name is shown on a brief
    * intro banner (3 s) at the start of each level run.  Pass an empty string
    * to suppress the banner.
@@ -397,6 +404,13 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
    * Set via setWaveEnemyBias(); reset to {} when setActive(false) is called.
    */
   let _waveEnemyBias: Partial<Record<string, number>> = {};
+
+  /**
+   * Offset added to the running wave counter when computing enemy HP/ATK/DEF.
+   * Set via setWaveBaseLevel() before each campaign level run.
+   * Reset to 0 when setActive(false) is called.
+   */
+  let _waveBaseLevel = 0;
 
   // ── Player attack state ────────────────────────────────────────
   const hitEffects: HitEffect[] = [];
@@ -803,6 +817,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
     setIsBossFightFromMenu:  (b) => { isBossFightFromMenu = b; },
     getCurrentWave:          () => currentWave,
     setCurrentWave:          (w) => { currentWave = w; },
+    getEffectiveWave:        () => currentWave + _waveBaseLevel,
     getIsInterWave:          () => isInterWave,
     setIsInterWave:          (b) => { isInterWave = b; },
     setInterWaveTimerMs:     (ms) => { interWaveTimerMs = ms; },
@@ -1678,9 +1693,10 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
       if (!active) {
         keys.left = keys.right = keys.up = keys.down = keys.charge = false;
         chargeMs = 0;
-        // Clear the wave bias so a stale campaign bias doesn't leak into
-        // endless mode or a subsequent level.
+        // Clear the wave bias and base level so stale campaign settings don't
+        // leak into endless mode or a subsequent level.
         _waveEnemyBias = {};
+        _waveBaseLevel = 0;
       }
       if (active) {
         applyEquipmentStats();
@@ -1757,6 +1773,10 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
 
     setWaveEnemyBias(bias: Partial<Record<string, number>>): void {
       _waveEnemyBias = bias;
+    },
+
+    setWaveBaseLevel(baseLevel: number): void {
+      _waveBaseLevel = Math.max(0, Math.round(baseLevel));
     },
 
     setLevelName(name: string): void {

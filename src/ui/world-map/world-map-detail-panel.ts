@@ -132,16 +132,29 @@ export function renderDetailPanel(ctx: DetailPanelCtx): void {
     icon.className = 'wm-level-icon';
     icon.textContent = levelStateIcon(levelState, level.type === 'boss');
 
+    const nameWrap = document.createElement('div');
+    nameWrap.className = 'wm-level-name-wrap';
+
     const name = document.createElement('span');
     name.className = 'wm-level-name';
     name.textContent = level.name;
+    nameWrap.appendChild(name);
+
+    // Show a one-line description for unlocked/completed levels so players know
+    // what to expect before entering.
+    if (levelState !== 'locked' && level.description) {
+      const desc = document.createElement('span');
+      desc.className = 'wm-level-desc';
+      desc.textContent = level.description;
+      nameWrap.appendChild(desc);
+    }
 
     const num = document.createElement('span');
     num.className = 'wm-level-number';
     num.textContent = level.type === 'boss' ? 'BOSS' : `${level.number}`;
 
     item.appendChild(icon);
-    item.appendChild(name);
+    item.appendChild(nameWrap);
     item.appendChild(num);
 
     // Click to start an unlocked/current level
@@ -182,7 +195,27 @@ export function renderDetailPanel(ctx: DetailPanelCtx): void {
         bossCard.appendChild(bossDesc);
       }
 
+      // Boss mechanics list
+      if (level.bossMechanics && level.bossMechanics.length > 0) {
+        const mechList = document.createElement('ul');
+        mechList.className = 'wm-boss-mechanics';
+        for (const mech of level.bossMechanics) {
+          const mechItem = document.createElement('li');
+          mechItem.textContent = mech;
+          mechList.appendChild(mechItem);
+        }
+        bossCard.appendChild(mechList);
+      }
+
       mandatoryList.appendChild(bossCard);
+    }
+
+    // Reward badge for completed levels
+    if (levelState === 'completed' && level.reward) {
+      const rewardBadge = document.createElement('div');
+      rewardBadge.className = 'wm-level-reward';
+      rewardBadge.textContent = `✦ ${level.reward}`;
+      mandatoryList.appendChild(rewardBadge);
     }
   }
 
@@ -212,17 +245,29 @@ export function renderDetailPanel(ctx: DetailPanelCtx): void {
     icon.className = 'wm-level-icon';
     icon.textContent = itemState === 'completed' ? '✓' : itemState === 'locked' ? '🔒' : '◈';
 
+    const nameWrap = document.createElement('div');
+    nameWrap.className = 'wm-level-name-wrap';
+
     const name = document.createElement('span');
     name.className = 'wm-level-name';
-    name.textContent = `B${challenge.base6Number}`;
+    name.textContent = challenge.name.replace(/^Base 6 Trial:\s*/i, '');
+    nameWrap.appendChild(name);
 
-    const desc = document.createElement('span');
-    desc.className = 'wm-level-number';
-    desc.textContent = challenge.name.replace('Base 6 Trial: ', '');
+    // Show the challenge rule as a subtitle when unlocked or completed.
+    if (itemState !== 'locked' && challenge.challengeRule) {
+      const ruleEl = document.createElement('span');
+      ruleEl.className = 'wm-level-desc';
+      ruleEl.textContent = challenge.challengeRule;
+      nameWrap.appendChild(ruleEl);
+    }
+
+    const badge = document.createElement('span');
+    badge.className = 'wm-level-number';
+    badge.textContent = `B${challenge.base6Number}`;
 
     item.appendChild(icon);
-    item.appendChild(name);
-    item.appendChild(desc);
+    item.appendChild(nameWrap);
+    item.appendChild(badge);
     item.title = unlocked ? challenge.challengeRule : 'Complete Level 5 to unlock Base 6 challenges.';
 
     if (itemState === 'unlocked') {
@@ -232,7 +277,25 @@ export function renderDetailPanel(ctx: DetailPanelCtx): void {
       });
     }
 
+    // Dev: right-click marks Base6 challenge complete for testing
+    if (state.devMode && itemState !== 'completed') {
+      const capturedWorldId = selectedWorldId;
+      item.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        markLevelComplete(state, capturedWorldId, challenge.id);
+        onRefresh();
+      });
+    }
+
     base6List.appendChild(item);
+
+    // Reward badge for completed Base6 challenges
+    if (itemState === 'completed' && challenge.reward) {
+      const rewardBadge = document.createElement('div');
+      rewardBadge.className = 'wm-level-reward';
+      rewardBadge.textContent = `✦ ${challenge.reward}`;
+      base6List.appendChild(rewardBadge);
+    }
   }
 
   base6Section.appendChild(base6List);

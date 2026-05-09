@@ -297,8 +297,8 @@
 }
 
 .wm-level-name {
-  flex: 1;
-  min-width: 0;
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .wm-level-number {
@@ -337,7 +337,47 @@
   cursor: not-allowed;
 }
 
-/* ── Boss info section ─────────────────────────────────────────── */
+/* ── Level name + description column ──────────────────────────── */
+.wm-level-name-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.wm-level-name {
+  /* kept for compatibility — no flex: 1 here; parent wrap handles the flex */
+}
+
+.wm-level-desc {
+  font-size: 10px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+  white-space: normal;
+  opacity: 0.85;
+}
+
+/* ── Level reward badge ────────────────────────────────────────── */
+.wm-level-reward {
+  font-size: 10px;
+  color: #a0e080;
+  padding: 3px 10px 3px 34px; /* indent to align with level name */
+  opacity: 0.8;
+}
+
+/* ── Boss mechanics list ───────────────────────────────────────── */
+.wm-boss-mechanics {
+  margin: 6px 0 0 0;
+  padding: 0 0 0 16px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.wm-boss-mechanics li {
+  list-style: disc;
+}
 .wm-boss-info {
   padding: 10px;
   background: rgba(255, 80, 80, 0.05);

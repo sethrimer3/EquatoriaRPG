@@ -53,6 +53,12 @@ export interface EnemySpawnCtx {
   dim: { w: number; h: number };
   mote: { x: number; y: number };
   getCurrentWave(): number;
+  /**
+   * Returns the effective wave number used for enemy HP/ATK/DEF scaling.
+   * This is `currentWave + waveBaseLevel`, where `waveBaseLevel` is set per
+   * campaign level so later worlds have harder enemies from wave 1.
+   */
+  getEffectiveWave(): number;
   setBossEnemy(boss: BossEnemy | null): void;
   enterBossWave(): void;
 
@@ -91,7 +97,9 @@ export function spawnEnemyById(ctx: EnemySpawnCtx, enemyTypeId: string): void {
   const heightPx = dim.h;
   const minDist  = 80;
   let spawnX = 0, spawnY = 0, attempts = 0;
-  const wn = ctx.getCurrentWave();
+  // Use the effective wave number (currentWave + waveBaseLevel) for enemy stat
+  // scaling so that later campaign worlds spawn harder enemies from wave 1.
+  const wn = ctx.getEffectiveWave();
 
   if (enemyTypeId === 'laser') {
     const half = LASER_ENEMY_SIZE / 2;

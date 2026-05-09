@@ -131,10 +131,18 @@ export function markLevelComplete(
   const worldProgress = state.worlds.get(worldId);
   if (!worldProgress) return;
 
-  worldProgress.completedMandatoryLevelIds.add(levelId);
-
   const worldData = WORLD_MAP_DATA.find(w => w.id === worldId);
   if (!worldData) return;
+
+  // If this is a Base6 challenge ID, record it in completedBase6Ids and return.
+  // Base6 challenges don't advance the mandatory-level pointer.
+  const isBase6 = worldData.base6Set.some(b => b.id === levelId);
+  if (isBase6) {
+    worldProgress.completedBase6Ids.add(levelId);
+    return;
+  }
+
+  worldProgress.completedMandatoryLevelIds.add(levelId);
 
   const completedLevel = worldData.mandatoryLevels.find(l => l.id === levelId);
   if (!completedLevel) return;
