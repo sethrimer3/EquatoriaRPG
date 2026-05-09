@@ -18,6 +18,8 @@ export interface RpgJoystick {
 export interface RpgKeyState {
   left: boolean; right: boolean;
   up: boolean; down: boolean;
+  /** True while the player is holding the charge key (Space / KeyF). */
+  charge: boolean;
 }
 
 export interface RpgPlayerStats {

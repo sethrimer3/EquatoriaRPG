@@ -125,6 +125,7 @@ export function createRpgInput(ctx: RpgInputCtx): RpgInputHandle {
       case 'ArrowRight': case 'KeyD': keys.right = true;  break;
       case 'ArrowUp':    case 'KeyW': keys.up    = true;  break;
       case 'ArrowDown':  case 'KeyS': keys.down  = true;  break;
+      case 'Space':      case 'KeyF': keys.charge = true; e.preventDefault(); break;
       default: return;
     }
     if (e.code.startsWith('Arrow')) e.preventDefault();
@@ -137,6 +138,7 @@ export function createRpgInput(ctx: RpgInputCtx): RpgInputHandle {
       case 'ArrowRight': case 'KeyD': keys.right = false; break;
       case 'ArrowUp':    case 'KeyW': keys.up    = false; break;
       case 'ArrowDown':  case 'KeyS': keys.down  = false; break;
+      case 'Space':      case 'KeyF': keys.charge = false; break;
     }
   }
 

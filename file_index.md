@@ -382,7 +382,9 @@
 - Randomly attaches a `mathObjective` to any enemy based on wave tier and per-kind biases.
 - Wave-tier spawn chances: 1–5 → 25%, 6–15 → 30%, 16–30 → 35%, 31+ → 40%.
 - Per-kind biases (applied at wave 31+) for: iolite, diamond, quartz, amethyst, citrine, nullstone, fracteryl, eigenstein, alivened.
-- Pure function — no state, no DOM side effects.
+- **Solvability guard**: module-level `_currentPlayerAtk` (default 10) updated via `setCurrentPlayerAtk(atk)`. All exact/threshold/sumTarget targets in the generic wave-tier bucket are clamped via `clampToReachable(value, maxMult)` so objectives are always achievable at the player's current ATK.
+- `setCurrentPlayerAtk(atk)` — called from `applyEquipmentStats()` in `rpg-render.ts` on every stat update.
+- `clampToReachable(value, maxMult)` — private helper; returns value clamped to `[0.25×ATK, maxMult×ATK]`.
 
 
 ### src/render/rpg/rpg-fluid.ts
@@ -627,12 +629,13 @@
 - `rpg-render.ts` builds `playerDamageCtx` once and delegates both functions via thin wrappers that match the `RpgEnemyCtx.dealDamageToPlayer` / `dealDamageToPlayerKnockback` signatures.
 
 ### src/render/rpg/rpg-input.ts
-- Pointer and keyboard input handling for the RPG tab (~140 lines).
+- Pointer and keyboard input handling for the RPG tab.
 - Extracted from `rpg-render.ts` to isolate input translation from game logic.
 - Exports `RpgInputCtx` interface, `RpgInputHandle` interface, and `createRpgInput(ctx)` factory.
 - Registers canvas pointer events (pointerdown/move/up/cancel) → virtual joystick state.
-- Registers document keyboard events (WASD + Arrow keys) → `RpgKeyState`.
+- Registers document keyboard events (WASD + Arrow keys + Space/F charge key) → `RpgKeyState`.
 - Detects short taps (≤250ms, ≤10px movement) and calls `tryTargetEnemyAt` for manual enemy targeting.
+- `Space` and `KeyF` set `keys.charge = true`; release clears it (used by charge attack in rpg-render.ts).
 - Provides `dispose()` to remove document-level keyboard listeners.
 - `rpg-render.ts` calls `createRpgInput({ canvas, dim, joystick, keys, getIsActive, tryTargetEnemyAt })` at init time.
 
@@ -745,10 +748,12 @@
 - Zero DOM/canvas/render dependencies.
 
 ### src/render/rpg/rpg-math-objective-draw.ts
-- Canvas rendering for math objective overlays (~130 lines).
-- Exports: `drawMathObjective(ctx, obj, ex, ey, radius, deltaMs)`, `drawMathObjectivesForArray(ctx, enemies, radius, deltaMs)`, `getCachedTextWidth(ctx, text)`, `LABEL_CACHE_SIZE = 64`.
+- Canvas rendering for math objective overlays.
+- Exports: `drawMathObjective(ctx, obj, ex, ey, radius, deltaMs)`, `drawMathObjectivesForArray(ctx, enemies, radius, deltaMs)`, `drawTutorialBanner(ctx, deltaMs, canvasWidth, canvasHeight)`, `resetObjectiveTutorials()`.
 - Draws a progress ring above each enemy that has a `mathObjective`, plus an accepted/rejected feedback flash.
 - LRU text-width cache avoids per-frame `measureText` calls.
+- Tutorial banner system: per-session `_seenObjectiveKinds` Set; first encounter of each objective kind triggers a 4 s gold-bordered banner explaining the mechanic.
+- `resetObjectiveTutorials()` clears the session state (called on `setActive(true)` in rpg-render.ts).
 - Called from `rpg-render.ts` after each body-enemy draw call.
 
 ### src/sim/rpg/rpg-state.ts
@@ -998,10 +1003,14 @@ Audio system — eight focused modules:
 ### src/ui/world-map/WorldMapScreen.ts
 - Full-screen world map overlay. Canvas spiral map on the left; DOM detail panel on the right.
 - Exports: `createWorldMapScreen(onClose, initialState, onMainMenu?): WorldMapScreen`.
-- Interface: `WorldMapScreen { element, show(), hide(), refresh(state), setParticleQuality(q), destroy() }`.
+- Interface: `WorldMapScreen { element, show(), hide(), refresh(state), setParticleQuality(q), scheduleNewWorldHighlight(worldId), destroy() }`.
 - Continuous RAF animation loop drives the particle simulation when visible (`startAnimLoop`/`stopAnimLoop`).
-- `drawMap()` called every frame: clears canvas → particle draw → path lines → world nodes → text labels.
-- Canvas rendering: 11 colored world nodes + curved paths, selected node highlight, boss rings, chapter numbers.
+- `drawMap()` called every frame: clears canvas → particle draw → path lines → world nodes → text labels → level progress dots → unlock-flash rings.
+- Canvas rendering: 11 colored world nodes + curved paths, selected node highlight, boss rings, chapter numbers, level progress dots.
+- `scheduleNewWorldHighlight(worldId)`: queues a 4 s gold pulsing ring + "NEW!" label animation on a world node (shown when the player returns to the map after a world-unlocking level completion).
+- Hover tooltip: `.wm-node-tooltip` DOM element shows world name, chapter, and unlock state on mousemove; hides on mouseleave.
+- FPS auto-quality: rolling FPS monitor in animFrame; auto-reduces particle quality if FPS < 30 for 3+ s; auto-restores after 5+ s above 50 fps.
+- Level progress dots: drawn below world name; coloured = completed, accent-blue = current, dim = future.
 - Detail panel rendering delegated to `world-map-detail-panel.ts`; color utilities from `world-map-color-utils.ts`.
 - DEV mode: toggle unlocks all worlds for testing; right-click levels to mark complete.
 - Back button shows "← Main Menu" and calls `onMainMenu` when provided.

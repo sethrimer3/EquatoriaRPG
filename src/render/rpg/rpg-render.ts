@@ -300,7 +300,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
   };
 
   const joystick: RpgJoystick = { isActive: false, pointerId: -1, baseX: 0, baseY: 0, thumbX: 0, thumbY: 0 };
-  const keys: RpgKeyState = { left: false, right: false, up: false, down: false };
+  const keys: RpgKeyState = { left: false, right: false, up: false, down: false, charge: false };
   const playerStats: RpgPlayerStats = { hp: PLAYER_HP_INIT, maxHp: PLAYER_HP_INIT, atk: PLAYER_ATK_INIT, def: PLAYER_DEF_INIT, regen: PLAYER_REGEN_INIT };
 
   // ── Player movement state (managed by rpg-player-movement.ts) ──
@@ -318,6 +318,16 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
   let _currentDeltaMs = 0; // captured by draw() for math objective overlay ticks
   let _isActive = false;
   let rpgPhase: RpgPhase = 'alive';
+
+  // ── Charge attack state ──────────────────────────────────────────
+  /** How long the charge key has been held (ms). Resets on release or shot. */
+  let chargeMs = 0;
+  /** Maximum charge time (ms); full charge = max damage multiplier. */
+  const CHARGE_MAX_MS = 1500;
+  /** Minimum hold time to trigger a charged shot (ms). */
+  const CHARGE_MIN_MS = 300;
+  /** Maximum charge damage multiplier (achieved at CHARGE_MAX_MS). */
+  const CHARGE_MAX_MULT = 3.0;
 
   // ── Level-completion tracking ────────────────────────────────────
   /**
@@ -1007,6 +1017,9 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
 
   function triggerDeath(): void {
     rpgPhase = 'dying'; phaseTimerMs = 0; deathAlpha = 1;
+    // Cancel any pending charge so it doesn't fire after respawn.
+    chargeMs = 0;
+    keys.charge = false;
     deathParticles.length = 0;
     for (let i = 0; i < DEATH_BURST_COUNT; i++) {
       const angle = (i / DEATH_BURST_COUNT) * Math.PI * 2 + Math.random() * 0.35;
@@ -1158,6 +1171,38 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
 
     drawPlayerMote(ctx, mote, playerMovementState.glowMovementIntensity, rpgPhase, deathAlpha, glowTimeS, playerIFramesMs);
 
+    // ── Charge ring visual ──────────────────────────────────────────
+    // Draw an expanding arc and glow around the player while charging.
+    if (rpgPhase === 'alive' && chargeMs > 0) {
+      const chargeFrac = Math.min(1, chargeMs / CHARGE_MAX_MS);
+      // Ring radius grows from 4 to 14 px as charge fills.
+      const ringR  = 4 + chargeFrac * 10;
+      const alpha  = 0.3 + chargeFrac * 0.65;
+      // Colour cycles gold → white at full charge.
+      const g = Math.round(200 + chargeFrac * 55);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      // Outer glow arc (full circle, progress fill).
+      ctx.beginPath();
+      ctx.arc(mote.x, mote.y, ringR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * chargeFrac);
+      ctx.strokeStyle = `rgb(255,${g},64)`;
+      ctx.lineWidth   = 2 + chargeFrac * 2;
+      ctx.shadowColor = `rgb(255,${g},64)`;
+      ctx.shadowBlur  = 8 + chargeFrac * 14;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      // Label: "CHARGED!" at full charge.
+      if (chargeFrac >= 1) {
+        ctx.font = 'bold 6px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillStyle = '#fff';
+        ctx.globalAlpha = 0.9;
+        ctx.fillText('CHARGED!', mote.x, mote.y - ringR - 2);
+      }
+      ctx.restore();
+    }
+
     drawHitEffects(ctx, hitEffects);
     drawLuckyMotes(ctx, luckyMotes, isLowGraphicsMode);
     drawDamageNumbers(ctx, damageNumbers);
@@ -1206,6 +1251,19 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
     // ── First-encounter tutorial banner for math objectives ──────────
     if (rpgPhase === 'alive') {
       drawTutorialBanner(ctx, _currentDeltaMs, widthPx, heightPx);
+    }
+
+    // ── Charge-attack key hint (desktop, waves 1–3) ──────────────────
+    // Shown only in the first 3 waves (enough to teach but not distracting).
+    if (rpgPhase === 'alive' && currentWave <= 3 && chargeMs === 0) {
+      ctx.save();
+      ctx.font = '5px monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#ccc';
+      ctx.fillText('[Space/F] Charge shot', widthPx - 4, heightPx - 4);
+      ctx.restore();
     }
 
     // ── Level Complete! victory banner ────────────────────────────
@@ -1465,6 +1523,34 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
       updateLuckyMotes(luckyMotes, luckyMotePopups, mote.x, mote.y, deltaMs, options.onLuckyMoteCollected ?? (() => {}));
       updateLuckyMotePopups(luckyMotePopups, deltaMs);
 
+      // ── Charge attack tick ────────────────────────────────────────
+      // Space / KeyF held → build charge; release → fire a charged shot
+      // that multiplies player ATK by up to CHARGE_MAX_MULT.
+      if (rpgPhase === 'alive' && keys.charge) {
+        chargeMs = Math.min(chargeMs + deltaMs, CHARGE_MAX_MS);
+      } else if (chargeMs >= CHARGE_MIN_MS) {
+        // Key just released with enough charge built up — fire a boosted shot.
+        const chargeFrac = Math.min(1, chargeMs / CHARGE_MAX_MS);
+        const chargeMult = 1 + (CHARGE_MAX_MULT - 1) * chargeFrac;
+        const prevAtk = playerStats.atk;
+        playerStats.atk *= chargeMult;
+        // Fire on all equipped weapons (same as a normal auto-attack tick).
+        for (const weaponId of getEffectiveEquippedIds()) {
+          statsPanel.withDamageSource(weaponId, () => performWeaponAttack(weaponId));
+        }
+        // If no weapons equipped, use the base sand attack.
+        if (getEffectiveEquippedIds().size === 0) {
+          statsPanel.withDamageSource(BASE_ATTACK_TIMER_KEY, () => performWeaponAttack(BASE_ATTACK_TIMER_KEY));
+        }
+        playerStats.atk = prevAtk;
+        removeDeadEnemies();
+        checkWaveCompletion();
+        chargeMs = 0;
+      } else if (!keys.charge) {
+        // Released with insufficient charge — reset.
+        chargeMs = 0;
+      }
+
       // Apply HP regen: regenerate regen% of maxHp per second when alive.
       if (rpgPhase === 'alive' && playerStats.hp > 0 && playerStats.hp < playerStats.maxHp) {
         playerStats.hp = Math.min(
@@ -1488,7 +1574,10 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
 
     setActive(active: boolean): void {
       _isActive = active;
-      if (!active) { keys.left = keys.right = keys.up = keys.down = false; }
+      if (!active) {
+        keys.left = keys.right = keys.up = keys.down = keys.charge = false;
+        chargeMs = 0;
+      }
       if (active) {
         applyEquipmentStats();
         if (currentWave === 0 && rpgPhase === 'alive') {
