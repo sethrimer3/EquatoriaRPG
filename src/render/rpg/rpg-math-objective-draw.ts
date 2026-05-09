@@ -29,13 +29,32 @@ const LABEL_CACHE_SIZE = 64;          // maximum entries in the text-width LRU c
 
 // ── Tutorial banner ────────────────────────────────────────────
 
+/** localStorage key for persisting seen objective kinds across sessions. */
+const TUTORIAL_SEEN_STORAGE_KEY = 'equatoria_seen_objectives';
+
 /**
  * Per-session set of objective kinds that the player has already been
- * tutorialized for.  Cleared only on page reload (i.e. per game session),
- * which is intentional — the player should not see the same banner twice
- * in one play session.
+ * tutorialized for.  Pre-populated from localStorage so returning players
+ * don't see the same banners again.
  */
-const _seenObjectiveKinds = new Set<string>();
+const _seenObjectiveKinds: Set<string> = (() => {
+  try {
+    const raw = localStorage.getItem(TUTORIAL_SEEN_STORAGE_KEY);
+    if (raw) return new Set<string>(JSON.parse(raw) as string[]);
+  } catch {
+    // Ignore parse errors — start fresh.
+  }
+  return new Set<string>();
+})();
+
+/** Persist the seen-objectives set to localStorage. */
+function _persistSeenObjectives(): void {
+  try {
+    localStorage.setItem(TUTORIAL_SEEN_STORAGE_KEY, JSON.stringify([..._seenObjectiveKinds]));
+  } catch {
+    // Storage may be unavailable (private-browse quota, etc.) — ignore.
+  }
+}
 
 /** Duration for the first-encounter tutorial banner (ms). */
 const TUTORIAL_BANNER_DURATION_MS = 4000;
@@ -68,11 +87,12 @@ const OBJECTIVE_EXPLANATIONS: Partial<Record<string, string>> = {
 
 /**
  * Register an objective as newly visible and queue a tutorial banner
- * if this kind has not been seen this session.
+ * if this kind has not been seen before (across sessions).
  */
 function maybeShowTutorialBanner(kind: string): void {
   if (_seenObjectiveKinds.has(kind)) return;
   _seenObjectiveKinds.add(kind);
+  _persistSeenObjectives();
   const text = OBJECTIVE_EXPLANATIONS[kind];
   if (!text) return;
   _activeTutorial = {
@@ -141,9 +161,13 @@ export function drawTutorialBanner(
   ctx.restore();
 }
 
-/** Reset the tutorial state (call when starting a new level). */
+/**
+ * Reset the active tutorial banner (call when starting a new level).
+ * The _seenObjectiveKinds set is intentionally preserved (persisted to
+ * localStorage) so the player is not shown the same hints again across
+ * sessions.  Only the currently-displayed banner is dismissed.
+ */
 export function resetObjectiveTutorials(): void {
-  _seenObjectiveKinds.clear();
   _activeTutorial = null;
 }
 

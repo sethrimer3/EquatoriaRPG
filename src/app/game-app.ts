@@ -148,6 +148,30 @@ export async function startApp(): Promise<void> {
   rpgContainer.style.display = 'none';   // revealed by main menu onStartGame
   root.appendChild(rpgContainer);
 
+  // ── Mobile charge button ──
+  // Overlays the RPG arena in the bottom-right corner (opposite the joystick).
+  // Fires a charge-shot on pointerdown; pointerdone fires when released.
+  // The button synthesises keyboard charge events so the existing charge-attack
+  // logic in rpg-render.ts handles both desktop (Space/F) and mobile identically.
+  const mobileChargeBtn = document.createElement('button');
+  mobileChargeBtn.id = 'mobile-charge-btn';
+  mobileChargeBtn.setAttribute('aria-label', 'Charge shot');
+  mobileChargeBtn.textContent = '⚡';
+  mobileChargeBtn.style.display = 'none'; // hidden until arena is shown
+  // Wire it to synthetic keyboard events that rpg-input.ts handles.
+  mobileChargeBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF', bubbles: true }));
+  });
+  mobileChargeBtn.addEventListener('pointerup', (e) => {
+    e.preventDefault();
+    document.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyF', bubbles: true }));
+  });
+  mobileChargeBtn.addEventListener('pointercancel', () => {
+    document.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyF', bubbles: true }));
+  });
+  root.appendChild(mobileChargeBtn);
+
   // ── Level-complete overlay: "Return to Map" CTA ──
   // Shown after the level-complete banner fires; hidden when returning to map.
   const levelCompleteOverlay = document.createElement('div');
@@ -254,8 +278,9 @@ export async function startApp(): Promise<void> {
     rpgContainer.style.display = 'none';
     rpgRender.statsPanel.style.display = 'none';
     rpgMenuPanel.setVisible(false);
-    // Hide the post-completion CTA whenever we leave the arena.
+    // Hide the post-completion CTA and mobile charge button whenever we leave the arena.
     levelCompleteOverlay.style.display = 'none';
+    mobileChargeBtn.style.display = 'none';
     saveWorldMapProgression(worldMapProgressionState);
     // Refresh the map canvas/detail panel so any progression changes
     // made during the RPG session are reflected immediately.
@@ -345,6 +370,8 @@ export async function startApp(): Promise<void> {
       // Show the RPG arena containers
       rpgContainer.style.display = '';
       rpgRender.statsPanel.style.display = '';
+      // Show mobile charge button when arena is active.
+      mobileChargeBtn.style.display = '';
       // Activate and resize the RPG renderer
       rpgRender.setActive(true);
       rpgRender.resize(rpgContainer);
