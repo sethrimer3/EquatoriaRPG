@@ -217,6 +217,12 @@ export interface RpgRender {
   setNumberFormat(format: NumberFormat): void;
   /** Show or hide dev-mode numerical designators on each RPG stats panel box. */
   setDevMode(enabled: boolean): void;
+  /**
+   * Set how many waves must be cleared before the level-completion callback fires.
+   * Call this each time a new level is started so different levels can have
+   * different challenge lengths.  Defaults to WAVES_TO_COMPLETE_LEVEL (3).
+   */
+  setLevelWaveTarget(waveCount: number): void;
 }
 
 /** Options passed to createRpgRender. */
@@ -232,6 +238,16 @@ export interface RpgRenderOptions {
    * to add a 4th XP wire).  Callers should play the error SFX.
    */
   onError?: () => void;
+  /**
+   * Called once when the player clears enough waves to satisfy the world-map
+   * level-completion threshold (WAVES_TO_COMPLETE_LEVEL).  The caller should
+   * mark the active level complete, save world-map progression, and refresh
+   * the world-map screen.
+   *
+   * The callback is fired at most once per `setActive(true)` call; calling
+   * setActive again resets the counter.
+   */
+  onLevelComplete?: () => void;
 }
 
 export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState, options: RpgRenderOptions = {}): RpgRender {
@@ -301,6 +317,26 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
   let _currentDeltaMs = 0; // captured by draw() for math objective overlay ticks
   let _isActive = false;
   let rpgPhase: RpgPhase = 'alive';
+
+  // ── Level-completion tracking ────────────────────────────────────
+  /**
+   * Default: how many waves must be cleared before level completion fires.
+   * Overridable per-level via setLevelWaveTarget().
+   */
+  const DEFAULT_WAVES_TO_COMPLETE = 3;
+  /** Current wave target for this level run (may be overridden by setLevelWaveTarget). */
+  let _wavesToCompleteLevel = DEFAULT_WAVES_TO_COMPLETE;
+  /** Wave number at the moment the player entered the current level. */
+  let _levelStartWave = 0;
+  /** Set once per setActive(true) cycle when the completion threshold is met. */
+  let _levelCompleted = false;
+  /** How long (ms) the "Level Complete!" victory banner has been showing. */
+  let _levelCompleteBannerMs = 0;
+  const LEVEL_COMPLETE_BANNER_DURATION_MS = 5000;
+  /** Title font as a fraction of canvas width (0.055 → ~5.5% of canvas width). */
+  const LEVEL_COMPLETE_TITLE_SCALE    = 0.055;
+  /** Subtitle font as a fraction of canvas width (0.030 → ~3.0% of canvas width). */
+  const LEVEL_COMPLETE_SUBTITLE_SCALE = 0.030;
   let phaseTimerMs     = 0;
   let deathAlpha       = 1;
   let screenDarken     = 0;
@@ -1163,6 +1199,35 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
 
     if (rpgPhase === 'alive') drawWaveClearBanner(ctx, isInterWave, currentWave, interWaveTimerMs, widthPx, heightPx);
 
+    // ── Level Complete! victory banner ────────────────────────────
+    if (_levelCompleted && _levelCompleteBannerMs < LEVEL_COMPLETE_BANNER_DURATION_MS) {
+      const t = _levelCompleteBannerMs / LEVEL_COMPLETE_BANNER_DURATION_MS;
+      // Fade in quickly, hold, then fade out for the last 20%.
+      const alpha = t < 0.12
+        ? t / 0.12
+        : t > 0.80
+          ? (1 - t) / 0.20
+          : 1;
+      const y = heightPx * 0.38;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+      ctx.font = `bold ${Math.round(widthPx * LEVEL_COMPLETE_TITLE_SCALE)}px monospace`;
+      ctx.textAlign = 'center';
+      // Gold glow
+      ctx.shadowColor = '#ffe066';
+      ctx.shadowBlur  = 18;
+      ctx.fillStyle   = '#fff172';
+      ctx.fillText('✨ Level Complete!', widthPx / 2, y);
+      // Subtitle hint
+      ctx.font = `${Math.round(widthPx * LEVEL_COMPLETE_SUBTITLE_SCALE)}px monospace`;
+      ctx.fillStyle = '#c8f0ff';
+      ctx.shadowBlur = 8;
+      ctx.fillText('Return to map to claim your progress', widthPx / 2, y + Math.round(widthPx * LEVEL_COMPLETE_TITLE_SCALE) + 6);
+      ctx.shadowBlur  = 0;
+      ctx.textAlign   = 'left';
+      ctx.restore();
+    }
+
     // ── Top-left wave number overlay ──────────────────────────────
     if (currentWave > 0) {
       // Check if any enemy or player is near the top-left corner region
@@ -1259,10 +1324,26 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
 
       if (isInterWave) {
         interWaveTimerMs -= deltaMs;
-        if (interWaveTimerMs <= 0) startNextWave();
+        if (interWaveTimerMs <= 0) {
+          startNextWave();
+          // Check level-completion threshold after each wave starts.
+          // The check uses the live currentWave (already incremented inside startNextWave).
+          if (!_levelCompleted && currentWave >= _levelStartWave + _wavesToCompleteLevel) {
+            _levelCompleted = true;
+            options.onLevelComplete?.();
+          }
+        }
       } else {
         tickSpawnQueue(deltaMs);
         checkWaveCompletion();
+      }
+
+      // Advance the "Level Complete!" victory banner timer.
+      if (_levelCompleted && _levelCompleteBannerMs < LEVEL_COMPLETE_BANNER_DURATION_MS) {
+        _levelCompleteBannerMs = Math.min(
+          _levelCompleteBannerMs + deltaMs,
+          LEVEL_COMPLETE_BANNER_DURATION_MS,
+        );
       }
 
       updatePlayerMovement(movementCtx, playerMovementState, deltaMs);
@@ -1405,6 +1486,10 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
           isInterWave = true;
           interWaveTimerMs = INTER_WAVE_DELAY_MS * 0.4;
         }
+        // Reset level-completion tracking each time a level run begins.
+        _levelStartWave = currentWave;
+        _levelCompleted = false;
+        _levelCompleteBannerMs = 0;
       }
     },
 
@@ -1457,6 +1542,10 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
 
     setDevMode(enabled: boolean): void {
       statsPanel.setDevMode(enabled);
+    },
+
+    setLevelWaveTarget(waveCount: number): void {
+      _wavesToCompleteLevel = Math.max(1, Math.round(waveCount));
     },
   };
 }

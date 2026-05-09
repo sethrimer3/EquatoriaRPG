@@ -43,6 +43,7 @@ import { createWorldMapScreen } from '../ui/world-map/WorldMapScreen';
 import {
   createWorldMapProgressionState,
   registerLevelLauncher,
+  markLevelComplete,
 } from '../systems/worldMapProgression';
 import { createLevelScreen } from '../ui/level-screen/LevelScreen';
 import { WORLD_LEVEL_PLANS, WORLD_COLOR_MAP } from '../data/worldLevelPlans';
@@ -164,6 +165,17 @@ export async function startApp(): Promise<void> {
       addMotes(appState.game.resources, tierId, bonus);
     },
     onError: () => { audioSystem.onError(); },
+    onLevelComplete: () => {
+      // Mark the active level complete in the world-map progression.
+      if (activeLevelWorldId && activeLevelId) {
+        markLevelComplete(worldMapProgressionState, activeLevelWorldId as import('../types/worldMapTypes').WorldId, activeLevelId);
+      }
+      // Persist the updated progression so it survives a page reload.
+      saveWorldMapProgression(worldMapProgressionState);
+      console.info(
+        `[Campaign] Level complete — world="${activeLevelWorldId}" level="${activeLevelId}". Progression saved.`,
+      );
+    },
   });
   rpgRender.setNumberFormat(settings.numberFormat);
   root.appendChild(rpgRender.statsPanel);
@@ -175,7 +187,9 @@ export async function startApp(): Promise<void> {
   // ── Settings panel (created before rpgMenuPanel so it can be passed in) ──
   const settingsPanel = createSettingsPanel(settings, (action: GameAction) => {
     dispatch(action);
-  }, audioSystem, applyFocusedAudio);
+  }, audioSystem, applyFocusedAudio, {
+    onWorldMapParticleQuality: (q) => { worldMapScreen?.setParticleQuality(q); },
+  });
 
   // ── Forward-declared references — assigned later; closures capture the binding. ──
   // All navigation helpers below are CALLED only after every object is created,
@@ -254,6 +268,8 @@ export async function startApp(): Promise<void> {
     worldMapProgressionState,
     goToMainMenu,
   );
+  // Apply persisted particle quality.
+  worldMapScreen.setParticleQuality(settings.worldMapParticleQuality ?? 'full');
   root.appendChild(worldMapScreen.element);
 
   // ── Active level context (set when the player launches a level) ──
@@ -277,6 +293,10 @@ export async function startApp(): Promise<void> {
       // Activate and resize the RPG renderer
       rpgRender.setActive(true);
       rpgRender.resize(rpgContainer);
+      // Set wave target based on level type:
+      //   boss levels require 5 waves (more challenging),
+      //   mandatory and optional challenges require 3.
+      rpgRender.setLevelWaveTarget(levelDef.type === 'boss' ? 5 : 3);
       // Start the game loop
       gameLoop.start();
       // Confirm active level context (set by registerLevelLauncher above, but

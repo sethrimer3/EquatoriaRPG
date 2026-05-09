@@ -1,10 +1,49 @@
-# nextSteps.md — World Map Mobile Fix & Campaign Wiring
+# nextSteps.md — Continue Implementation: Level Completion, Quality Settings, Base 6
 
 ---
 
-## World Map Mobile Fix & Campaign Wiring (current session)
+## Continue Implementation (current session)
 
-### What was fixed / implemented
+### What was implemented
+
+#### Level completion hook (`rpg-render.ts`, `game-app.ts`)
+- Added `onLevelComplete?: () => void` to `RpgRenderOptions`.
+- Added `WAVES_TO_COMPLETE_LEVEL = 3`: after the player clears 3 waves from the wave number at which the level was started, the callback fires once per level run.
+- Tracking state: `_levelStartWave`, `_levelCompleted`, `_levelCompleteBannerMs` — reset whenever `setActive(true)` is called.
+- A gold **"✨ Level Complete!"** canvas banner animates for 5 seconds with a fade-in/hold/fade-out curve and a "Return to map to claim your progress" subtitle.
+- In `game-app.ts`, `onLevelComplete` calls `markLevelComplete(worldMapProgressionState, worldId, levelId)` → `saveWorldMapProgression()` → logs the event.
+- When the player later taps "🗺 Map" / "Back to World Map" in the RPG menu, `worldMapScreen.refresh(worldMapProgressionState)` is already called in `showWorldMap()`, so the map reflects the new completion state immediately.
+
+#### World map particle quality setting (`settings-state.ts`, `settings-panel.ts`, `game-app.ts`)
+- Added `worldMapParticleQuality: 'full' | 'reduced' | 'low'` to `SettingsState` (default: `'full'`). Old saves without this field fall back to the default via the existing spread-defaults logic in `loadSettings`.
+- Added **"World Map Particles"** select row in the Settings panel (Full / Reduced / Low).
+- `createSettingsPanel` gains an optional `extraCallbacks` argument (`onWorldMapParticleQuality`).
+- `game-app.ts` passes the callback (a closure that calls `worldMapScreen.setParticleQuality`), and also applies the persisted quality immediately after creating `worldMapScreen`.
+
+#### Base 6 challenges wired (`worldMapProgression.ts`)
+- `startOptionalChallenge(worldId, challengeId)` now calls the registered `_levelLauncher` (same as `startWorldLevel`).
+- The launcher passes `(worldId, challengeId)` to `game-app.ts` → `WORLD_LEVEL_PLANS.get(challengeId)` → opens `LevelScreen` if a `LevelDefinition` exists, or logs a warning otherwise.
+- This means any Base 6 challenges that have a matching entry in `WORLD_LEVEL_PLANS` can now be launched and played through, not just mandatory levels.
+
+### Files changed (this session)
+- `src/render/rpg/rpg-render.ts` — `onLevelComplete` option, completion tracking state + check, "Level Complete!" banner draw
+- `src/app/game-app.ts` — import `markLevelComplete`, wire `onLevelComplete`, apply particle quality on startup, pass `extraCallbacks` to settings panel
+- `src/settings/settings-state.ts` — `worldMapParticleQuality` field + default
+- `src/ui/panels/settings-panel.ts` — `extraCallbacks` parameter, "World Map Particles" select row
+- `src/systems/worldMapProgression.ts` — `startOptionalChallenge` uses `_levelLauncher`
+
+### What still needs work
+1. **Level completion → world-unlock visual**: when `markLevelComplete` unlocks a new world, the world map should animate or highlight the newly unlocked node. Currently the node just changes from locked to current on the next map refresh.
+2. **Level-specific wave count**: currently every level completes after exactly 3 waves. A production game would read the wave count from the `LevelDefinition` (e.g., based on level number or type). A `waveCount` field on `LevelDefinition` + `MandatoryLevel` would let each level have a different challenge length.
+3. **Base 6 LevelDefinitions**: Base 6 challenges only open the LevelScreen if a matching entry exists in `WORLD_LEVEL_PLANS`. Most Base 6 IDs are not yet in that map — they need `LevelDefinition` entries, or the launcher needs a fallback that creates a generic Base 6 level layout.
+4. **Post-completion CTA**: after the "Level Complete!" banner, there's no in-arena button to go back to the world map. Players must use ⚔ Menu → Back to World Map. A persistent "🗺 Return to Map" button on the canvas after completion would improve UX.
+5. **Auto particle quality**: if FPS drops below ~40 fps, auto-reduce particle quality. A frame-rate monitor polling average frame time could drive `worldMapScreen.setParticleQuality('reduced')` automatically.
+6. **Tooltip on hover** for world nodes.
+7. **Level node granularity**: individual level sub-nodes on the spiral (not just world nodes).
+
+---
+
+
 
 #### Critical coordinate system bug (mobile map invisible / unclickable)
 - **Root cause**: `normToCanvas()` used `canvas.width` / `canvas.height` (backing-store pixels, which are `CSS px × DPR`) while `ctx.setTransform(dpr,0,0,dpr,0,0)` means all drawing coordinates must be in CSS pixels.

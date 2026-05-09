@@ -193,9 +193,19 @@ export function startWorldLevel(worldId: WorldId, levelId: string): boolean {
   return false;
 }
 
-/** Placeholder: begin a Base6 optional challenge. Returns false until gameplay is wired. */
+/**
+ * Begin a Base6 optional challenge.
+ * Uses the same level launcher as mandatory levels — the launcher will open
+ * the LevelScreen if a LevelDefinition exists for the challengeId, or show a
+ * console warning if not yet designed.
+ * Returns true if the launcher was called, false otherwise.
+ */
 export function startOptionalChallenge(worldId: WorldId, challengeId: string): boolean {
-  console.log(`[WorldMap] startOptionalChallenge(${worldId}, ${challengeId}) — placeholder`);
+  if (_levelLauncher) {
+    _levelLauncher(worldId, challengeId);
+    return true;
+  }
+  console.log(`[WorldMap] startOptionalChallenge(${worldId}, ${challengeId}) — no launcher registered`);
   return false;
 }
 

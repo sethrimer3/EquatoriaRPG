@@ -4,6 +4,7 @@ import { saveSettings } from '../../settings';
 import type { AudioSystem } from '../../audio';
 import { makePageBreak } from '../ui-helpers';
 import { particleTweaks, PARTICLE_TWEAKS_DEFAULTS, resetParticleTweaks } from '../../data/particles/particle-tweaks';
+import { PARTICLE_COUNTS } from '../../render/world-map/worldMapParticles';
 
 // ─── Slider glow constants ───────────────────────────────────────
 
@@ -33,6 +34,10 @@ export function createSettingsPanel(
   dispatch: ActionHandler,
   audioSystem?: AudioSystem,
   onFocusSettingChange?: () => void,
+  /** Extra callbacks for settings that need to update live systems. */
+  extraCallbacks?: {
+    onWorldMapParticleQuality?: (quality: 'full' | 'reduced' | 'low') => void;
+  },
 ): SettingsPanel {
   const panel = document.createElement('div');
   panel.className = 'panel settings-panel';
@@ -140,6 +145,23 @@ export function createSettingsPanel(
     },
   );
   panel.appendChild(enemyIndicatorRow);
+
+  // World map particle quality
+  const wmParticleRow = createSelectRow(
+    'World Map Particles',
+    settings.worldMapParticleQuality ?? 'full',
+    [
+      { value: 'full',    label: `Full (${PARTICLE_COUNTS.full})` },
+      { value: 'reduced', label: `Reduced (${PARTICLE_COUNTS.reduced})` },
+      { value: 'low',     label: `Low (${PARTICLE_COUNTS.low})` },
+    ],
+    (v) => {
+      settings.worldMapParticleQuality = v as SettingsState['worldMapParticleQuality'];
+      saveSettings(settings);
+      extraCallbacks?.onWorldMapParticleQuality?.(settings.worldMapParticleQuality);
+    },
+  );
+  panel.appendChild(wmParticleRow);
 
   // Screen shake toggle
   const shakeRow = createToggleRow('Screen Shake', settings.isScreenShakeEnabled, (v) => {
