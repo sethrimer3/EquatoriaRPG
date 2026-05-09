@@ -119,4 +119,10 @@ export interface LevelDefinition {
   readonly twist?: string;
   readonly room: RoomDefinition;
   readonly placeholderMechanics?: readonly string[];
+  /**
+   * How many waves must be cleared for this level to be considered complete.
+   * When omitted the RPG arena uses its default per-type fallback
+   * (boss → 5 waves, others → 3 waves).
+   */
+  readonly waveCount?: number;
 }

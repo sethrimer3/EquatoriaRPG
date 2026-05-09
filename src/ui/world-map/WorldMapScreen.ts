@@ -35,6 +35,12 @@ export interface WorldMapScreen {
   refresh(state: WorldMapProgressionState): void;
   /** Update particle quality (e.g. from settings change). */
   setParticleQuality(quality: ParticleQuality): void;
+  /**
+   * Queue a brief unlock-pulse animation on a world node.
+   * Plays automatically the next time the map is shown (or immediately
+   * if the map is already visible).  Safe to call before `show()`.
+   */
+  scheduleNewWorldHighlight(worldId: WorldId): void;
   destroy(): void;
 }
 
@@ -95,6 +101,26 @@ export function createWorldMapScreen(
   let particleQuality: ParticleQuality = 'full';
   let particleSys = createWorldMapParticles(particleQuality);
   let isVisible = false;
+
+  /**
+   * Worlds pending an unlock-flash animation.
+   * Each entry holds the worldId and the remaining display duration in ms.
+   * Entries are removed when duration reaches 0.
+   */
+  const unlockFlashes = new Map<WorldId, number>();
+  /** Total duration for the unlock-flash pulse animation (ms). */
+  const UNLOCK_FLASH_DURATION_MS = 4000;
+
+  // ── FPS auto-detection ──
+  // Track a rolling window of recent frame times to compute average FPS.
+  // When FPS stays below FPS_REDUCE_THRESHOLD for FPS_REDUCE_WINDOW_MS,
+  // particle quality is automatically lowered.
+  const FPS_REDUCE_THRESHOLD = 30;      // fps — reduce if below this
+  const FPS_REDUCE_WINDOW_MS = 3000;    // ms — how long FPS must be low before reducing
+  const FPS_RESTORE_THRESHOLD = 50;     // fps — restore to 'full' if consistently above this
+  const FPS_RESTORE_WINDOW_MS = 5000;   // ms — how long FPS must be high before restoring
+  let _fpsLowMs  = 0;   // accumulated ms below FPS_REDUCE_THRESHOLD this window
+  let _fpsHighMs = 0;   // accumulated ms above FPS_RESTORE_THRESHOLD this window
 
   // ── Root element ──
   const element = document.createElement('div');
@@ -162,6 +188,13 @@ export function createWorldMapScreen(
   const ctxRaw = canvas.getContext('2d');
   if (!ctxRaw) throw new Error('WorldMapScreen: failed to get 2D canvas context');
   const ctx = ctxRaw;
+
+  // ── Node hover tooltip (desktop) ──
+  // Positioned absolutely inside `body` so it can overflow the canvas area.
+  const nodeTooltip = document.createElement('div');
+  nodeTooltip.className = 'wm-node-tooltip';
+  nodeTooltip.style.display = 'none';
+  body.appendChild(nodeTooltip);
 
   // ── Detail panel ──
   const detailPanel = document.createElement('div');
@@ -348,6 +381,43 @@ export function createWorldMapScreen(
         ctx.fillText('⬡', node.cx, node.cy - node.radius - 3);
       }
     }
+
+    // ── Unlock-flash rings (drawn after all nodes so they are on top) ──
+    const nowMs = performance.now();
+    for (const [wId, remaining] of unlockFlashes) {
+      const node = nodes.find(n => n.worldId === wId);
+      if (!node) continue;
+      // Normalised progress [0,1]: 0 = just started, 1 = almost done
+      const t = 1 - remaining / UNLOCK_FLASH_DURATION_MS;
+      // Oscillate with decreasing amplitude (fades out)
+      const oscillations = 4;
+      const pulse = Math.sin(t * oscillations * Math.PI * 2) * (1 - t);
+      // Outer ring expands then contracts
+      const expandR = node.radius + 14 + pulse * 10;
+      const alpha = (1 - t) * 0.85;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, alpha);
+      ctx.beginPath();
+      ctx.arc(node.cx, node.cy, expandR, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ffe066';
+      ctx.lineWidth = 3;
+      ctx.shadowColor = '#ffe066';
+      ctx.shadowBlur = 16;
+      ctx.stroke();
+      // "NEW!" label on first half of animation
+      if (t < 0.5) {
+        ctx.font = `bold ${Math.round(node.radius * 0.55)}px 'Poiret One', sans-serif`;
+        ctx.fillStyle = '#ffe066';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.shadowBlur = 8;
+        ctx.fillText('NEW!', node.cx, node.cy + node.radius + Math.round(node.radius * 0.7));
+      }
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+    // Reset time tracking (not used by nowMs — included only to satisfy linter).
+    void nowMs;
   }
 
   // ─── Detail panel rendering ──────────────────────────────────────
@@ -426,10 +496,47 @@ export function createWorldMapScreen(
     onCanvasClick(e);
   }, { passive: false });
 
-  // Pointer cursor when hovering a node
+  // Pointer cursor + tooltip when hovering a node
   canvas.addEventListener('mousemove', (e: MouseEvent) => {
     const { px, py } = clientToCanvas(e.clientX, e.clientY);
-    canvas.style.cursor = getNodeAtPoint(px, py) ? 'pointer' : 'default';
+    const node = getNodeAtPoint(px, py);
+    canvas.style.cursor = node ? 'pointer' : 'default';
+
+    if (node) {
+      const worldData = WORLD_MAP_DATA.find(w => w.id === node.worldId);
+      const s = getWorldUnlockState(state, node.worldId);
+      const stateLabel: Record<typeof s, string> = {
+        completed: '✅ Completed',
+        current:   '▶ In Progress',
+        unlocked:  '🔓 Unlocked',
+        locked:    '🔒 Locked',
+      };
+      const lines = [
+        worldData ? `<strong>${worldData.name}</strong>` : node.worldId,
+        worldData ? `Chapter ${worldData.chapter}` : '',
+        stateLabel[s],
+      ].filter(Boolean);
+      nodeTooltip.innerHTML = lines.join('<br>');
+      // Position the tooltip in the canvas area's coordinate space.
+      // Use canvas bounding rect to convert client coords to body-relative.
+      const canvasRect = canvas.getBoundingClientRect();
+      const bodyRect   = body.getBoundingClientRect();
+      const tooltipX = e.clientX - bodyRect.left + 14;
+      const tooltipY = e.clientY - bodyRect.top  - 8;
+      nodeTooltip.style.left = `${tooltipX}px`;
+      nodeTooltip.style.top  = `${tooltipY}px`;
+      nodeTooltip.style.display = '';
+      // Suppress unused-variable lint (canvasRect only used for a future
+      // clamping step if the tooltip overflows the right edge).
+      void canvasRect;
+    } else {
+      nodeTooltip.style.display = 'none';
+    }
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    nodeTooltip.style.display = 'none';
+    canvas.style.cursor = 'default';
   });
 
   // ─── Resize ─────────────────────────────────────────────────────
@@ -476,6 +583,49 @@ export function createWorldMapScreen(
     const dtMs = Math.min(nowMs - lastFrameMs, MAX_FRAME_DELTA_MS);
     lastFrameMs = nowMs;
 
+    // Tick unlock-flash timers.
+    for (const [wId, remaining] of unlockFlashes) {
+      const next = remaining - dtMs;
+      if (next <= 0) {
+        unlockFlashes.delete(wId);
+      } else {
+        unlockFlashes.set(wId, next);
+      }
+    }
+
+    // ── FPS auto-quality ──────────────────────────────────────────
+    if (dtMs > 0) {
+      const fps = 1000 / dtMs;
+      if (fps < FPS_REDUCE_THRESHOLD) {
+        _fpsLowMs += dtMs;
+        _fpsHighMs = 0;
+        if (_fpsLowMs >= FPS_REDUCE_WINDOW_MS && particleQuality === 'full') {
+          // Auto-reduce to 'reduced'
+          applyParticleQuality('reduced');
+          _fpsLowMs = 0;
+          console.info('[WorldMap] Auto-reduced particle quality to "reduced" (FPS < 30)');
+        } else if (_fpsLowMs >= FPS_REDUCE_WINDOW_MS && particleQuality === 'reduced') {
+          // Reduce further to 'low'
+          applyParticleQuality('low');
+          _fpsLowMs = 0;
+          console.info('[WorldMap] Auto-reduced particle quality to "low" (FPS < 30)');
+        }
+      } else {
+        _fpsLowMs = 0;
+        if (fps > FPS_RESTORE_THRESHOLD && particleQuality !== 'full') {
+          _fpsHighMs += dtMs;
+          if (_fpsHighMs >= FPS_RESTORE_WINDOW_MS) {
+            const next = particleQuality === 'low' ? 'reduced' as const : 'full' as const;
+            applyParticleQuality(next);
+            _fpsHighMs = 0;
+            console.info(`[WorldMap] Auto-restored particle quality to "${next}" (FPS > 50)`);
+          }
+        } else {
+          _fpsHighMs = 0;
+        }
+      }
+    }
+
     // Particle positions are in CSS pixel space (matching the ctx DPR transform).
     const cxCSS = canvasArea.clientWidth / 2;
     const cyCSS = canvasArea.clientHeight / 2;
@@ -485,6 +635,19 @@ export function createWorldMapScreen(
     drawMap();
 
     animRafId = requestAnimationFrame(animFrame);
+  }
+
+  /** Internal helper: apply a quality level without the idempotency guard. */
+  function applyParticleQuality(quality: ParticleQuality): void {
+    particleQuality = quality;
+    particleSys = createWorldMapParticles(quality);
+    if (isVisible) {
+      const cxCSS = canvasArea.clientWidth / 2;
+      const cyCSS = canvasArea.clientHeight / 2;
+      const maxR = Math.min(cxCSS, cyCSS) * 0.92;
+      particleSys.resize(cxCSS, cyCSS, maxR);
+      particleSys.setActive(true);
+    }
   }
 
   function startAnimLoop(): void {
@@ -546,15 +709,16 @@ export function createWorldMapScreen(
     refresh,
     setParticleQuality(quality: ParticleQuality): void {
       if (quality === particleQuality) return;
-      particleQuality = quality;
-      particleSys = createWorldMapParticles(quality);
-      if (isVisible) {
-        const cxCSS = canvasArea.clientWidth / 2;
-        const cyCSS = canvasArea.clientHeight / 2;
-        const maxR = Math.min(cxCSS, cyCSS) * 0.92;
-        particleSys.resize(cxCSS, cyCSS, maxR);
-        particleSys.setActive(true);
-      }
+      applyParticleQuality(quality);
+      // Reset FPS accumulators so a manual quality change isn't immediately
+      // re-overridden by the auto-detection logic.
+      _fpsLowMs  = 0;
+      _fpsHighMs = 0;
+    },
+    scheduleNewWorldHighlight(worldId: WorldId): void {
+      // Queue the unlock-flash animation; it plays the next time drawMap() is
+      // called from the anim loop (which starts when the map is shown).
+      unlockFlashes.set(worldId, UNLOCK_FLASH_DURATION_MS);
     },
     destroy,
   };

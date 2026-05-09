@@ -1061,3 +1061,50 @@
 }
 
 
+
+/* ── Level-complete CTA overlay ──────────────────────────────── */
+.lvl-complete-overlay {
+  position: fixed;
+  /* Sit over the RPG container but below the world-map overlay (z=80) */
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: max(80px, 12vh);
+  pointer-events: none; /* transparent background; button re-enables interaction */
+}
+
+.lvl-complete-overlay__btn {
+  pointer-events: auto;
+  padding: 14px 36px;
+  background: rgba(8, 8, 20, 0.85);
+  border: 2px solid #ffe066;
+  border-radius: 14px;
+  color: #fff172;
+  font-family: var(--font-primary);
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  box-shadow: 0 0 28px rgba(255, 224, 102, 0.35), 0 4px 16px rgba(0, 0, 0, 0.5);
+  touch-action: manipulation;
+  transition: background 0.2s, box-shadow 0.2s;
+  animation: lvl-cta-pulse 2s ease-in-out infinite;
+}
+
+.lvl-complete-overlay__btn:hover,
+.lvl-complete-overlay__btn:focus-visible {
+  background: rgba(255, 224, 102, 0.15);
+  box-shadow: 0 0 40px rgba(255, 224, 102, 0.55), 0 4px 16px rgba(0, 0, 0, 0.5);
+  outline: none;
+}
+
+.lvl-complete-overlay__btn:active {
+  transform: scale(0.97);
+}
+
+@keyframes lvl-cta-pulse {
+  0%, 100% { box-shadow: 0 0 28px rgba(255, 224, 102, 0.35), 0 4px 16px rgba(0, 0, 0, 0.5); }
+  50%       { box-shadow: 0 0 48px rgba(255, 224, 102, 0.65), 0 4px 16px rgba(0, 0, 0, 0.5); }
+}

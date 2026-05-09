@@ -76,8 +76,9 @@ function def(
   objective: string,
   room: ReturnType<typeof makeTeachChamber>,
   placeholderMechanics?: string[],
+  waveCount?: number,
 ): LevelDefinition {
-  return { id: `layout_${levelId}`, worldId, levelId, name, type, archetype, description, objective, room, placeholderMechanics };
+  return { id: `layout_${levelId}`, worldId, levelId, name, type, archetype, description, objective, room, placeholderMechanics, waveCount };
 }
 
 const plans: LevelDefinition[] = [];
@@ -146,7 +147,7 @@ plans.push(
     'A living empty variable cycling through values each phase.',
     'Match exact damage values as the boss changes phase.',
     makeBossArena({ roomId: 'on_10_r', roomName: 'Variable Sanctum', floorColor: FC[ON], bossLabel: '□', bossColor: '#80c8ff', phaseCount: 3, phaseLabels: ['Phase I: =3','Phase II: =7','Phase III: =?'], enemyConcepts: ['phase guardian','variable fragment'], mathMotifs: MOTIFS[ON] }),
-    ['boss-phase-transitions','exact-damage-boss']),
+    ['boss-phase-transitions','exact-damage-boss'], 5),
 
   def('on_b6_01', ON, 'B1: Precision Trial', 'optional_challenge', 'teach_chamber',
     'Hit exact small target values without overkill.',
@@ -249,7 +250,7 @@ plans.push(
     'A boss with four arithmetic pillars controlling its phases.',
     'Defeat each pillar phase using the correct arithmetic rule.',
     makeBossArena({ roomId: 'as_10_r', roomName: 'Titan\'s Crucible', floorColor: FC[AS], bossLabel: 'Σ', bossColor: '#ffd764', phaseCount: 4, phaseLabels: ['+Phase','−Phase','×Phase','÷Phase'], enemyConcepts: ['arithmetic titan','pillar guardian'], mathMotifs: MOTIFS[AS] }),
-    ['boss-phase-pillars','arithmetic-phases']),
+    ['boss-phase-pillars','arithmetic-phases'], 5),
 
   def('as_b6_01', AS, 'B1: Precision', 'optional_challenge', 'teach_chamber',
     'Exact arithmetic targets only.',
@@ -352,7 +353,7 @@ plans.push(
     'A multi-headed boss occupying fraction islands.',
     'Defeat each head using its fractional weak point.',
     makeBossArena({ roomId: 'ff_10_r', roomName: 'Hydra Bog', floorColor: FC[FF], bossLabel: '÷', bossColor: '#50e88c', phaseCount: 4, phaseLabels: ['½ Head','⅓ Head','¼ Head','Common Head'], enemyConcepts: ['hydra head','fraction guardian'], mathMotifs: MOTIFS[FF] }),
-    ['boss-fraction-heads','denominator-phases']),
+    ['boss-fraction-heads','denominator-phases'], 5),
 
   def('ff_b6_01', FF, 'B1: Precision', 'optional_challenge', 'teach_chamber',
     'Exact fractional segment values.',
@@ -455,7 +456,7 @@ plans.push(
     'Two equation sides shifting variable anchors.',
     'Keep both sides balanced while defeating the Warden.',
     makeBossArena({ roomId: 'ag_10_r', roomName: 'Warden\'s Grove', floorColor: FC[AG], bossLabel: '=', bossColor: '#a0e060', phaseCount: 3, phaseLabels: ['One-step','Two-step','Inequality'], enemyConcepts: ['balance warden','anchor guardian'], mathMotifs: MOTIFS[AG] }),
-    ['boss-balance','equation-phases']),
+    ['boss-balance','equation-phases'], 5),
 
   def('ag_b6_01', AG, 'B1: Precision', 'optional_challenge', 'teach_chamber',
     'Solve exact variable values.',
@@ -558,7 +559,7 @@ plans.push(
     'A boss that changes its shape each phase.',
     'Adapt to each polygon form to find the weak point.',
     makeBossArena({ roomId: 'gp_10_r', roomName: 'Monarch\'s Peak', floorColor: FC[GP], bossLabel: '⬡', bossColor: '#c0d8f8', phaseCount: 4, phaseLabels: ['Triangle','Square','Pentagon','∞-gon'], enemyConcepts: ['polygon monarch','shape guardian'], mathMotifs: MOTIFS[GP] }),
-    ['boss-shape-phases','polygon-transformation']),
+    ['boss-shape-phases','polygon-transformation'], 5),
 
   def('gp_b6_01', GP, 'B1: Precision', 'optional_challenge', 'teach_chamber',
     'Exact side or angle targets.',
@@ -661,7 +662,7 @@ plans.push(
     'A boss with shifting axes, slope attacks, and coordinate traps.',
     'Anticipate the engine\'s coordinate mechanics each phase.',
     makeBossArena({ roomId: 'cc_10_r', roomName: 'Cartesian Core', floorColor: FC[CC], bossLabel: '⊕', bossColor: '#74c0fc', phaseCount: 3, phaseLabels: ['Axis Shift','Slope Storm','Coordinate Trap'], enemyConcepts: ['engine guardian','axis mote'], mathMotifs: MOTIFS[CC] }),
-    ['boss-axis-shift','slope-attacks','coordinate-traps']),
+    ['boss-axis-shift','slope-attacks','coordinate-traps'], 5),
 
   def('cc_b6_01', CC, 'B1: Precision', 'optional_challenge', 'teach_chamber',
     'Attack from exact coordinate zones only.',
@@ -764,7 +765,7 @@ plans.push(
     'A flowing boss with weak points during rate changes.',
     'Strike the Leviathan only during its rate-change moments.',
     makeBossArena({ roomId: 'cf_10_r', roomName: 'Leviathan Falls', floorColor: FC[CF], bossLabel: 'd/dt', bossColor: '#60b8e0', phaseCount: 3, phaseLabels: ['Steady Flow','Acceleration','Limit Approach'], enemyConcepts: ['leviathan segment','flow guardian'], mathMotifs: MOTIFS[CF] }),
-    ['boss-rate-change','flow-phases']),
+    ['boss-rate-change','flow-phases'], 5),
 
   def('cf_b6_01', CF, 'B1: Precision', 'optional_challenge', 'teach_chamber',
     'Exact timing windows only.',
@@ -867,7 +868,7 @@ plans.push(
     'A boss with randomized but telegraphed weighted attacks.',
     'Read the Matriarch\'s probability display and counter each phase.',
     makeBossArena({ roomId: 'pg_10_r', roomName: 'Matriarch\'s Garden', floorColor: FC[PG], bossLabel: '?', bossColor: '#f0a0e0', phaseCount: 3, phaseLabels: ['P=0.6 Phase','P=0.3 Phase','P=0.1 Chaos'], enemyConcepts: ['matriarch form','chance guardian'], mathMotifs: MOTIFS[PG] }),
-    ['boss-probability-phases','telegraphed-random']),
+    ['boss-probability-phases','telegraphed-random'], 5),
 
   def('pg_b6_01', PG, 'B1: Precision', 'optional_challenge', 'teach_chamber',
     'Optimal damage under probability constraints.',
@@ -970,7 +971,7 @@ plans.push(
     'A boss with formation commands and grid transformations.',
     'Break each formation command to disable the General\'s phases.',
     makeBossArena({ roomId: 'mb_10_r', roomName: 'General\'s Bastion', floorColor: FC[MB], bossLabel: '[M]', bossColor: '#a0c8a0', phaseCount: 3, phaseLabels: ['Row Command','Col Command','Full Matrix'], enemyConcepts: ['array general','formation guardian'], mathMotifs: MOTIFS[MB] }),
-    ['boss-formation-commands','matrix-phases']),
+    ['boss-formation-commands','matrix-phases'], 5),
 
   def('mb_b6_01', MB, 'B1: Precision', 'optional_challenge', 'teach_chamber',
     'Exact row/column targets.',
@@ -1073,7 +1074,7 @@ plans.push(
     'A boss that recursively remixes earlier boss mechanics.',
     'Recognize and counter each recycled boss pattern.',
     makeBossArena({ roomId: 'fe_10_r', roomName: 'Seraph\'s Expanse', floorColor: FC[FE], bossLabel: 'Σⁿ', bossColor: '#c490ff', phaseCount: 4, phaseLabels: ['Origin Echo','Arithmetic Echo','Algebra Echo','Fractal Core'], enemyConcepts: ['recursive seraph','echo guardian'], mathMotifs: MOTIFS[FE] }),
-    ['boss-recursive-phases','mechanic-remix']),
+    ['boss-recursive-phases','mechanic-remix'], 5),
 
   def('fe_b6_01', FE, 'B1: Precision', 'optional_challenge', 'teach_chamber',
     'Hit exact recursive patterns.',
@@ -1176,7 +1177,7 @@ plans.push(
     'The ultimate boss transforming earlier world mechanics each phase.',
     'Defeat the Prime Equation by adapting to each world transformation.',
     makeBossArena({ roomId: 'ec_10_r', roomName: 'Prime Equation Sanctum', floorColor: FC[EC], bossLabel: 'Av=λv', bossColor: '#e89050', phaseCount: 5, phaseLabels: ['Origin Transform','Arithmetic Transform','Calculus Transform','Fractal Transform','Eigen Core'], enemyConcepts: ['prime equation','world echo','eigen guardian'], mathMotifs: MOTIFS[EC] }),
-    ['boss-world-transforms','final-boss-phases']),
+    ['boss-world-transforms','final-boss-phases'], 5),
 
   def('ec_b6_01', EC, 'B1: Precision', 'optional_challenge', 'teach_chamber',
     'Invariant target values must be exact.',

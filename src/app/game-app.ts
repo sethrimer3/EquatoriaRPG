@@ -44,10 +44,12 @@ import {
   createWorldMapProgressionState,
   registerLevelLauncher,
   markLevelComplete,
+  getWorldUnlockState,
 } from '../systems/worldMapProgression';
 import { createLevelScreen } from '../ui/level-screen/LevelScreen';
 import { WORLD_LEVEL_PLANS, WORLD_COLOR_MAP } from '../data/worldLevelPlans';
-import type { WorldMapProgressionState } from '../types/worldMapTypes';
+import type { WorldId, WorldMapProgressionState } from '../types/worldMapTypes';
+import { WORLD_MAP_DATA } from '../data/worldMapData';
 
 import type { AppState, UIPanels } from './app-types';
 import { handleAction as handleActionImpl } from './app-actions';
@@ -128,6 +130,19 @@ export async function startApp(): Promise<void> {
   rpgContainer.style.display = 'none';   // revealed by main menu onStartGame
   root.appendChild(rpgContainer);
 
+  // ── Level-complete overlay: "Return to Map" CTA ──
+  // Shown after the level-complete banner fires; hidden when returning to map.
+  const levelCompleteOverlay = document.createElement('div');
+  levelCompleteOverlay.className = 'lvl-complete-overlay';
+  levelCompleteOverlay.style.display = 'none';
+  const returnToMapBtn = document.createElement('button');
+  returnToMapBtn.className = 'lvl-complete-overlay__btn';
+  returnToMapBtn.textContent = '🗺 Return to Map';
+  returnToMapBtn.setAttribute('aria-label', 'Return to world map');
+  levelCompleteOverlay.appendChild(returnToMapBtn);
+  // Append after rpgContainer so it overlays it (same stacking context)
+  root.appendChild(levelCompleteOverlay);
+
   // ── Particle system ──
   const particles = new ParticleSystem();
 
@@ -166,15 +181,39 @@ export async function startApp(): Promise<void> {
     },
     onError: () => { audioSystem.onError(); },
     onLevelComplete: () => {
+      // Snapshot which worlds are unlocked BEFORE marking the level complete.
+      const prevUnlocked = new Set<WorldId>(
+        WORLD_MAP_DATA
+          .filter(w => getWorldUnlockState(worldMapProgressionState, w.id) !== 'locked')
+          .map(w => w.id),
+      );
+
       // Mark the active level complete in the world-map progression.
       if (activeLevelWorldId && activeLevelId) {
-        markLevelComplete(worldMapProgressionState, activeLevelWorldId as import('../types/worldMapTypes').WorldId, activeLevelId);
+        markLevelComplete(worldMapProgressionState, activeLevelWorldId as WorldId, activeLevelId);
       }
       // Persist the updated progression so it survives a page reload.
       saveWorldMapProgression(worldMapProgressionState);
       console.info(
         `[Campaign] Level complete — world="${activeLevelWorldId}" level="${activeLevelId}". Progression saved.`,
       );
+
+      // Determine which worlds were newly unlocked by this completion.
+      const newlyUnlocked: WorldId[] = WORLD_MAP_DATA
+        .filter(w =>
+          !prevUnlocked.has(w.id) &&
+          getWorldUnlockState(worldMapProgressionState, w.id) !== 'locked',
+        )
+        .map(w => w.id);
+
+      // If new worlds opened up, queue a pulse animation on those nodes for
+      // when the player returns to the map.
+      for (const wId of newlyUnlocked) {
+        worldMapScreen.scheduleNewWorldHighlight(wId);
+      }
+
+      // Show the "Return to Map" CTA button over the arena.
+      levelCompleteOverlay.style.display = '';
     },
   });
   rpgRender.setNumberFormat(settings.numberFormat);
@@ -206,6 +245,8 @@ export async function startApp(): Promise<void> {
     rpgContainer.style.display = 'none';
     rpgRender.statsPanel.style.display = 'none';
     rpgMenuPanel.setVisible(false);
+    // Hide the post-completion CTA whenever we leave the arena.
+    levelCompleteOverlay.style.display = 'none';
     saveWorldMapProgression(worldMapProgressionState);
     // Refresh the map canvas/detail panel so any progression changes
     // made during the RPG session are reflected immediately.
@@ -221,6 +262,9 @@ export async function startApp(): Promise<void> {
     saveWorldMapProgression(worldMapProgressionState);
     window.location.reload();
   }
+
+  // Wire the Return-to-Map CTA button (showWorldMap must be defined first).
+  returnToMapBtn.addEventListener('click', () => { showWorldMap(); });
 
   // ── Helper: apply the RPG bar position setting ──
   function applyRpgBarPosition(atTop: boolean): void {
@@ -287,16 +331,18 @@ export async function startApp(): Promise<void> {
     // onPlay: transition from level preview into the RPG arena
     (levelDef) => {
       levelScreen.hide();
+      // Hide any lingering level-complete CTA from a previous run.
+      levelCompleteOverlay.style.display = 'none';
       // Show the RPG arena containers
       rpgContainer.style.display = '';
       rpgRender.statsPanel.style.display = '';
       // Activate and resize the RPG renderer
       rpgRender.setActive(true);
       rpgRender.resize(rpgContainer);
-      // Set wave target based on level type:
-      //   boss levels require 5 waves (more challenging),
-      //   mandatory and optional challenges require 3.
-      rpgRender.setLevelWaveTarget(levelDef.type === 'boss' ? 5 : 3);
+      // Set wave target based on level definition:
+      //   Use the explicit waveCount field when available; fall back to
+      //   type-based defaults: boss → 5 waves, others → 3 waves.
+      rpgRender.setLevelWaveTarget(levelDef.waveCount ?? (levelDef.type === 'boss' ? 5 : 3));
       // Start the game loop
       gameLoop.start();
       // Confirm active level context (set by registerLevelLauncher above, but
