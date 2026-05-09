@@ -53,8 +53,11 @@ interface WorldNode {
 const NODE_RADIUS = 18;
 const BOSS_NODE_RADIUS = 22;
 const NODE_PADDING = 0.08;        // fraction of canvas dimension kept as margin
-/** Extra hit-test radius beyond visual radius so nodes are easy to tap. */
-const NODE_HIT_EXPAND = 8;
+/**
+ * Extra hit-test radius beyond visual radius so nodes are easy to tap.
+ * 22 CSS px gives a comfortable finger-sized target on mobile.
+ */
+const NODE_HIT_EXPAND = 22;
 /**
  * Perpendicular offset factor for path quadratic curves.
  * A small value (0.12) produces a gentle arc without dramatic bending.
@@ -147,6 +150,13 @@ export function createWorldMapScreen(
   canvasArea.className = 'wm-canvas-area';
   body.appendChild(canvasArea);
 
+  // ── Mobile hint label ──
+  // Shown below the canvas on narrow viewports to help first-time mobile users.
+  const mobileHint = document.createElement('div');
+  mobileHint.className = 'wm-mobile-hint';
+  mobileHint.textContent = 'Tap a world node to select a level';
+  canvasArea.appendChild(mobileHint);
+
   const canvas = document.createElement('canvas');
   canvasArea.appendChild(canvas);
   const ctxRaw = canvas.getContext('2d');
@@ -165,10 +175,19 @@ export function createWorldMapScreen(
     devBtn.setAttribute('aria-pressed', String(state.devMode));
   }
 
-  /** Map a normalized (0–1) world position to canvas pixel coordinates. */
+  /**
+   * Map a normalized (0–1) world position to CSS-pixel canvas coordinates.
+   *
+   * IMPORTANT: always use CSS pixel dimensions (clientWidth/clientHeight), NOT
+   * canvas.width/canvas.height.  canvas.width is the backing-store size
+   * (CSS px × DPR).  ctx.setTransform(dpr,0,0,dpr,0,0) means every drawing
+   * call expects CSS-pixel coordinates, so nodes must also live in that space.
+   * Mixing backing-store dimensions with the DPR transform pushes nodes off-
+   * screen by a factor of DPR on high-DPI (e.g. 2× or 3×) devices.
+   */
   function normToCanvas(nx: number, ny: number): { cx: number; cy: number } {
-    const w = canvas.width;
-    const h = canvas.height;
+    const w = canvasArea.clientWidth;
+    const h = canvasArea.clientHeight;
     const padX = w * NODE_PADDING;
     const padY = h * NODE_PADDING;
     return {
@@ -208,8 +227,12 @@ export function createWorldMapScreen(
 
   /** Draw the full map (called every animation frame). */
   function drawMap(): void {
-    const w = canvas.width;
-    const h = canvas.height;
+    // Use CSS pixel dimensions — the ctx DPR transform means all drawing
+    // coordinates are in CSS pixels.  Clearing with canvas.width/canvas.height
+    // (backing-store pixels) in the transformed context would over-clear by
+    // DPR², wasting fill operations (though Canvas clips it harmlessly).
+    const w = canvasArea.clientWidth;
+    const h = canvasArea.clientHeight;
     ctx.clearRect(0, 0, w, h);
 
     if (nodes.length === 0) return;
@@ -353,12 +376,19 @@ export function createWorldMapScreen(
     return null;
   }
 
-  /** Convert a client-space point to canvas pixel coordinates. */
+  /**
+   * Convert a client-space pointer position to CSS-pixel canvas coordinates.
+   *
+   * getBoundingClientRect() already returns CSS-pixel values, so subtracting
+   * rect.left/top gives the correct CSS-pixel offset — no DPR scaling needed.
+   * Node positions in `nodes[]` are also in CSS pixels (see normToCanvas), so
+   * hit-testing compares apples to apples.
+   */
   function clientToCanvas(clientX: number, clientY: number): { px: number; py: number } {
     const rect = canvas.getBoundingClientRect();
     return {
-      px: (clientX - rect.left) * (canvas.width / rect.width),
-      py: (clientY - rect.top) * (canvas.height / rect.height),
+      px: clientX - rect.left,
+      py: clientY - rect.top,
     };
   }
 

@@ -1,10 +1,82 @@
-# nextSteps.md — Math Objective System & Particle-Life Enemies
+# nextSteps.md — World Map Mobile Fix & Campaign Wiring
 
 ---
 
-## World Map First-Play Experience (new in this session)
+## World Map Mobile Fix & Campaign Wiring (current session)
 
-### What was completed
+### What was fixed / implemented
+
+#### Critical coordinate system bug (mobile map invisible / unclickable)
+- **Root cause**: `normToCanvas()` used `canvas.width` / `canvas.height` (backing-store pixels, which are `CSS px × DPR`) while `ctx.setTransform(dpr,0,0,dpr,0,0)` means all drawing coordinates must be in CSS pixels.
+  - On DPR=2 a world node at normalised position 0.5, 0.5 would be drawn at (canvas.width/2, canvas.height/2) in the transform-scaled context, which maps to backing-store pixel `canvas.width` — the bottom-right corner.
+  - Nodes were effectively placed off-screen by a factor of DPR.
+- **Fix** (`WorldMapScreen.ts`):
+  - `normToCanvas()` now uses `canvasArea.clientWidth / clientHeight` (CSS pixels, always correct).
+  - `clientToCanvas()` now returns `clientX - rect.left` / `clientY - rect.top` (CSS px, no DPR multiplier). Node positions and hit-test coordinates are now in the same space.
+  - `drawMap()` `clearRect` now uses CSS pixel dimensions, not backing-store dimensions.
+  - `NODE_HIT_EXPAND` increased from 8 to 22 CSS px for comfortable finger-sized touch targets.
+- **Result**: world nodes render in the correct positions on all DPR values (1×, 2×, 3×). Tapping/clicking works on mobile.
+
+#### Mobile layout improvements (`world-map.css`)
+- Canvas area height on portrait mobile increased from `52vw / 200px min` to `55vw / 220px min / 60vh max`.
+- Touch-action on canvas changed from `touch-action: none` to `touch-action: manipulation` (allows single-tap while suppressing double-tap zoom, preventing browser interference with node taps).
+- Added `.wm-mobile-hint` label ("Tap a world node to select a level") — visible only on `max-width: 600px` via media query, positioned at the bottom of the canvas area.
+
+#### Level Screen Play button wired (`LevelScreen.ts`)
+- `createLevelScreen` now accepts an optional `onPlay?: (levelDef: LevelDefinition) => void` callback.
+- When `onPlay` is provided: play button is enabled and labelled "▶ Play Level".
+- When omitted: play button remains disabled with "▶ Play Level (Coming Soon)" as before (backward-compatible).
+
+#### Campaign flow wired — Level → RPG arena (`game-app.ts`)
+- `createLevelScreen` now receives an `onPlay` callback that:
+  1. Hides the level screen.
+  2. Shows `rpgContainer` and `rpgRender.statsPanel`.
+  3. Calls `rpgRender.setActive(true)` and `rpgRender.resize(rpgContainer)`.
+  4. Calls `gameLoop.start()`.
+  - This creates the complete flow: World Map → Level Screen → ▶ Play Level → RPG Arena.
+- `registerLevelLauncher` now also sets `activeLevelWorldId` / `activeLevelId` so future completion hooks know which world/level is active.
+- Active level context variables (`activeLevelWorldId`, `activeLevelId`) are in place for future level-completion wiring.
+
+#### World map progression persistence (`save-load.ts`, `settings/index.ts`, `game-app.ts`)
+- Added `saveWorldMapProgression(state)` and `loadWorldMapProgression()` in `save-load.ts`, using a separate `equatoria_worldmap` localStorage key.
+- Both use `serializeWorldMapState` / `deserializeWorldMapState` from `worldMapProgression.ts` (already had full defensive parsing and version tolerance).
+- `game-app.ts` now loads world-map progression on startup; falls back to fresh state if absent.
+- World map state is saved:
+  - When `showWorldMap()` is called (entering map from RPG).
+  - When `goToMainMenu()` is called (before page reload).
+  - On `visibilitychange` to hidden (tab switch / home button on mobile).
+- Old saves without `equatoria_worldmap` load cleanly with fresh progression (no corruption).
+
+### Files changed
+- `src/ui/world-map/WorldMapScreen.ts` — coordinate system fix, hit expand, mobile hint
+- `src/styles/world-map.css` — mobile layout, touch-action, hint label style
+- `src/ui/level-screen/LevelScreen.ts` — optional onPlay callback, enable play button
+- `src/app/game-app.ts` — wire onPlay, load/save world map progression, active level context
+- `src/settings/save-load.ts` — saveWorldMapProgression / loadWorldMapProgression
+- `src/settings/index.ts` — export new save functions
+
+### What still needs work
+1. **Level completion hook**: `activeLevelWorldId` / `activeLevelId` are tracked but there is no RPG-side victory detection yet. When the player wins a wave run, `markLevelComplete(state, activeWorldId, activeLevelId)` should be called and `worldMapScreen.refresh(worldMapProgressionState)` invoked to keep the map current.
+2. **Particle quality from settings**: `worldMapScreen.setParticleQuality(q)` is available but no settings UI exposes it. Could be added to the Settings panel.
+3. **Base 6 gameplay**: `startOptionalChallenge` is still a stub. Base 6 click behavior is consistent (same level-item UI) but launching a challenge does nothing yet.
+4. **Level node granularity**: world map shows 11 world nodes; showing individual mandatory levels and challenges as sub-nodes along the spiral remains future work.
+5. **Tooltip on hover** for world nodes.
+6. **Auto quality detection**: reduce particle count when FPS is poor (frame-rate monitor → setParticleQuality).
+
+### Coordinate system rules (document for future sessions)
+- All world-map drawing uses CSS-pixel coordinates via the DPR context transform.
+- `normToCanvas()` must use `canvasArea.clientWidth / clientHeight` — never `canvas.width / canvas.height`.
+- `clientToCanvas()` must return `clientX - rect.left` — never multiply by `canvas.width / rect.width`.
+- `particleSys.resize/update` must receive CSS-pixel center and radius — never multiply by DPR.
+- `clearRect` must use CSS-pixel dimensions (or reset transform first).
+
+### Known limitations
+- The "Back to World Map" path does not currently refresh the world map state after a level run. If the player completes a level in the future, the world map will reflect changes only after the next explicit `worldMapScreen.refresh()` call.
+- Returning from RPG to World Map via `showWorldMap()` calls `gameLoop.stop()` correctly; the RPG loop does not run while the world map is displayed.
+
+---
+
+
 - **Navigation flow**: `Start Game` now opens the **World Map** first, not the RPG arena directly.
   - `game-app.ts` shows `worldMapScreen` in the `onStartGame` callback instead of the RPG container.
   - RPG container and stats bar remain hidden until a level is launched from the world map.

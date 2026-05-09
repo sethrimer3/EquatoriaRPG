@@ -29,6 +29,8 @@ import {
   loadGame,
   deleteSave,
   saveSettings,
+  saveWorldMapProgression,
+  loadWorldMapProgression,
 } from '../settings';
 import { createForgeCrunchState } from '../sim/forge';
 import { createGeneratorState } from '../sim/particles';
@@ -38,9 +40,13 @@ import { createRpgMenuPanel } from '../ui/panels/rpg-menu-panel';
 import { addMotes } from '../sim/resources/resource-state';
 import { createMainMenu } from '../ui/main-menu';
 import { createWorldMapScreen } from '../ui/world-map/WorldMapScreen';
-import { createWorldMapProgressionState, registerLevelLauncher } from '../systems/worldMapProgression';
+import {
+  createWorldMapProgressionState,
+  registerLevelLauncher,
+} from '../systems/worldMapProgression';
 import { createLevelScreen } from '../ui/level-screen/LevelScreen';
 import { WORLD_LEVEL_PLANS, WORLD_COLOR_MAP } from '../data/worldLevelPlans';
+import type { WorldMapProgressionState } from '../types/worldMapTypes';
 
 import type { AppState, UIPanels } from './app-types';
 import { handleAction as handleActionImpl } from './app-actions';
@@ -60,6 +66,13 @@ export async function startApp(): Promise<void> {
   const savedGame = loadGame();
   const game = savedGame ?? createGameState();
   const settings = loadSettings();
+
+  // ── World map progression — loaded from storage, defaults to fresh state ──
+  // Declared here (early) so it's available to both navigation helpers and the
+  // visibility-change save handler registered below.
+  const savedWorldMap = loadWorldMapProgression();
+  const worldMapProgressionState: WorldMapProgressionState =
+    savedWorldMap ?? createWorldMapProgressionState(settings.isDevMode);
 
   // ── Preload fonts ──
   try {
@@ -129,6 +142,7 @@ export async function startApp(): Promise<void> {
     applyFocusedAudio();
     if (document.visibilityState === 'hidden') {
       saveGame(game);
+      saveWorldMapProgression(worldMapProgressionState);
     }
   });
 
@@ -178,15 +192,19 @@ export async function startApp(): Promise<void> {
     rpgContainer.style.display = 'none';
     rpgRender.statsPanel.style.display = 'none';
     rpgMenuPanel.setVisible(false);
+    saveWorldMapProgression(worldMapProgressionState);
+    // Refresh the map canvas/detail panel so any progression changes
+    // made during the RPG session are reflected immediately.
+    worldMapScreen.refresh(worldMapProgressionState);
     worldMapScreen.show();
   }
 
   function goToMainMenu(): void {
     gameLoop.stop();
     worldMapScreen.hide();
-    // Save any in-progress persistent data, then reload.
-    // (In-level temporary progress is discarded; persistent upgrades/completions are kept.)
+    // Save both game state and world map progression, then reload.
     saveGame(appState.game);
+    saveWorldMapProgression(worldMapProgressionState);
     window.location.reload();
   }
 
@@ -230,24 +248,51 @@ export async function startApp(): Promise<void> {
   rpgRender.menuButtonContainer.appendChild(menuToggleBtn);
 
   // ── World map progression + screen ──
-  const worldMapProgression = createWorldMapProgressionState(settings.isDevMode);
+  // worldMapProgressionState was loaded from storage (or freshly created) above.
   worldMapScreen = createWorldMapScreen(
     () => { worldMapScreen.hide(); },
-    worldMapProgression,
+    worldMapProgressionState,
     goToMainMenu,
   );
   root.appendChild(worldMapScreen.element);
 
+  // ── Active level context (set when the player launches a level) ──
+  // This state lets the game loop and RPG arena know which level/world is active.
+  let activeLevelWorldId = '';
+  let activeLevelId = '';
+
   // ── Level screen (opened by startWorldLevel via registerLevelLauncher) ──
-  const levelScreen = createLevelScreen(() => {
-    levelScreen.hide();
-    worldMapScreen.show();
-  });
+  const levelScreen = createLevelScreen(
+    // onClose: go back to world map
+    () => {
+      levelScreen.hide();
+      worldMapScreen.show();
+    },
+    // onPlay: transition from level preview into the RPG arena
+    (levelDef) => {
+      levelScreen.hide();
+      // Show the RPG arena containers
+      rpgContainer.style.display = '';
+      rpgRender.statsPanel.style.display = '';
+      // Activate and resize the RPG renderer
+      rpgRender.setActive(true);
+      rpgRender.resize(rpgContainer);
+      // Start the game loop
+      gameLoop.start();
+      // Confirm active level context (set by registerLevelLauncher above, but
+      // levelDef.levelId is the canonical source in the onPlay path).
+      activeLevelId = levelDef.levelId ?? activeLevelId;
+      console.info(`[Campaign] Starting level "${activeLevelId}" in world "${activeLevelWorldId}"`);
+    },
+  );
   root.appendChild(levelScreen.element);
 
   registerLevelLauncher((worldId, levelId) => {
     const levelDef = WORLD_LEVEL_PLANS.get(levelId);
     const worldColor = WORLD_COLOR_MAP.get(worldId) ?? WORLD_COLOR_MAP.get('origin_nexus') ?? '#80c8ff';
+    // Track which world/level the player is about to enter
+    activeLevelWorldId = worldId;
+    activeLevelId = levelId;
     if (levelDef) {
       worldMapScreen.hide();
       levelScreen.show(levelDef, worldColor);

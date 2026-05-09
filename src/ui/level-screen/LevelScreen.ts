@@ -17,7 +17,10 @@ export interface LevelScreen {
   destroy(): void;
 }
 
-export function createLevelScreen(onClose: () => void): LevelScreen {
+export function createLevelScreen(
+  onClose: () => void,
+  onPlay?: (levelDef: LevelDefinition) => void,
+): LevelScreen {
   let currentLevelDef: LevelDefinition | null = null;
   let currentWorldColor = '#80c8ff';
   let rafId = 0;
@@ -74,9 +77,16 @@ export function createLevelScreen(onClose: () => void): LevelScreen {
   archetypeEl.className = 'ls-archetype';
 
   const playBtn = document.createElement('button');
-  playBtn.className = 'ls-play-btn ls-play-btn--disabled';
-  playBtn.textContent = '▶ Play Level (Coming Soon)';
-  playBtn.disabled = true;
+  playBtn.className = onPlay ? 'ls-play-btn' : 'ls-play-btn ls-play-btn--disabled';
+  playBtn.textContent = onPlay ? '▶ Play Level' : '▶ Play Level (Coming Soon)';
+  playBtn.disabled = !onPlay;
+  if (onPlay) {
+    playBtn.addEventListener('click', () => {
+      if (currentLevelDef) {
+        onPlay(currentLevelDef);
+      }
+    });
+  }
 
   infoBar.appendChild(objectiveEl);
   infoBar.appendChild(archetypeEl);
