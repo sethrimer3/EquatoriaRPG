@@ -228,6 +228,69 @@ The world map is a full-screen overlay that provides navigation to all 11 game w
 7. `markLevelComplete()` advances unlock state and propagates world unlocks
 
 ### State Ownership
-- `WorldMapProgressionState` is owned by `game-app.ts` (session-only until save integration)
-- Visual canvas state (selected node, node positions) is local to `WorldMapScreen.ts`
-- Canvas redraws on click interaction and resize only (no per-frame loop)
+- `WorldMapProgressionState` is owned by `game-app.ts`; persisted to `equatoria_worldmap` in localStorage
+- Visual canvas state (selected node, node positions, particle system) is local to `WorldMapScreen.ts`
+- Canvas runs a continuous RAF animation loop while visible; paused when hidden
+
+### Particle System Integration
+- `createWorldMapParticles(quality)` in `worldMapParticles.ts` creates a CSS-pixel particle system
+- Quality levels: `'full'` / `'reduced'` / `'low'` — set from Settings panel
+- FPS auto-detection: sustained < 30 FPS → step-down; sustained > 50 FPS → step-up
+- Auto-quality changes are persisted to `SettingsState.worldMapParticleQuality` via `onAutoQualityChange` callback
+
+### Node UX Enhancements
+- Hover tooltip shows world name, chapter, unlock state; right-edge clamped
+- Level progress dots rendered below node labels: colour-coded per level state, boss dot is larger
+- Newly unlocked nodes receive a 4-second gold-ring pulse (`scheduleNewWorldHighlight()`)
+- `detectNewlyUnlockedWorlds()` in `game-app.ts` compares before/after unlock sets on level completion
+
+## RPG Combat System
+
+### Architecture
+- `createRpgRender()` in `rpg-render.ts` owns all transient combat state
+- Persistent progression lives in `RpgSimState` (equipped weapons, XP, bossCompletions)
+- Per-level configuration passed via `RpgRenderOptions` before `setActive(true)`:
+  - `setLevelWaveTarget(n)` — how many waves until level complete (3 for standard, 5 for boss)
+  - `setWaveEnemyBias(bias)` — per-enemy-type spawn multiplier (`Partial<Record<string, number>>`)
+  - `setLevelName(name)` — shown as a 3-second intro banner at level start
+
+### Enemy Bias System
+- Each of the 11 campaign worlds has a default `BIAS_*` constant in `worldLevelPlans.ts`
+- `WORLD_BIAS[worldId]` maps to the correct bias; auto-applied by `def()` helper
+- `WaveManagerCtx.getWaveEnemyBias()` injects multipliers into `startNextWave()`
+- Boss/challenge levels inherit the world bias unless overridden with an explicit `{}` argument
+
+### Charge Attack
+- Hold Space / F key (or mobile `⚡` button) to build charge (0 → 100% over 1.5s)
+- Release fires a boosted shot up to 3× ATK; ATK mutation uses try-finally for safety
+- `_chargeReadyFired` flag prevents duplicate `onChargeReady()` SFX calls
+- Mobile button: `#mobile-charge-btn`, CSS `@media (pointer: fine)` hides on desktop; fires synthetic KeyF events
+
+### Level Completion Flow
+1. After `_wavesToCompleteLevel` waves cleared: `onLevelComplete?.()` fires once
+2. game-app.ts calls `markLevelComplete()` + saves world map progression
+3. "🗺 Return to Map" DOM button overlay (`.lvl-complete-overlay`) appears on canvas
+4. `detectNewlyUnlockedWorlds()` schedules gold-ring pulses for any newly unlocked worlds
+5. History API sentinel `{ screen: 'arena' }` was pushed on level start; `popstate` sees `{ screen: 'worldmap' }` after back → calls `showWorldMap()`
+
+### Math Objective System
+- `maybeAttachMathObjective()` attaches a `MathObjective` to enemies based on wave number
+- `clampToReachable(value, maxMult=4)` ensures objectives stay within player ATK range
+  - Max = 4× ATK (reachable with 3× charged shot + 1 hit)
+  - Min = 0.25× ATK (ensures digit/modulo objectives are never too small)
+- `setCurrentPlayerAtk()` keeps the factory in sync; called from `applyEquipmentStats()`
+- Tutorial banners: first-encounter explanations for each objective kind; persisted in `equatoria_seen_objectives` (localStorage); resettable via Settings panel "💡 Reset Tutorial Hints" button
+
+## Navigation Flow
+
+```
+Main Menu ──[Start Game]──→ World Map ──[Click level]──→ Level Preview ──[▶ Play]──→ RPG Arena
+               ↑                 ↑                               ↑                      │
+               │                 └───────[Back button / 🗺 Map]──┘──────────────────────┘
+               └───────────────────────[Menu → Back to Menu (saves + reload)]
+```
+
+Browser History API:
+- `showWorldMap()` calls `history.replaceState({ screen: 'worldmap' }, ...)`
+- Level start calls `history.pushState({ screen: 'arena' }, ...)`
+- `popstate` handler: if `e.state.screen === 'worldmap'` → `showWorldMap()`

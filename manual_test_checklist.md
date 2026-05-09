@@ -106,3 +106,47 @@
 - [ ] The right-side RPG stats widget shows one DPS row per equipped weapon with three-letter color abbreviations and colored bars
 - [ ] The DPS widget shows low/high axis labels that move with the sampled 10 second DPS range
 - [ ] DPS bars update smoothly over a rolling 10 second damage window
+
+## Charge Attack (Space / F / Mobile Button)
+- [ ] Holding Space or F key builds up a charge (arc ring grows around player)
+- [ ] At full charge the arc ring is complete and "CHARGED!" text appears
+- [ ] Releasing the key fires a boosted shot visible as a brighter projectile
+- [ ] Charge damage scales from 1× (minimal hold) to 3× ATK (full hold)
+- [ ] Releasing before CHARGE_MIN_MS threshold discards the charge (no shot)
+- [ ] `onChargeReady` SFX plays when meter reaches 100%
+- [ ] `onChargeRelease` SFX plays when charged shot fires
+- [ ] Charge resets on player death
+- [ ] `[Space/F] Charge shot` canvas hint appears for the first 3 waves then disappears
+- [ ] On mobile (touch device): `⚡` button is visible in bottom-right of the RPG arena
+- [ ] Holding mobile `⚡` button builds charge; releasing fires the charged shot
+- [ ] Mobile `⚡` button is hidden on desktop (pointer:fine screens)
+
+## Campaign Level Completion Flow
+- [ ] After clearing enough waves (3 for standard, 5 for boss), level-complete banner appears
+- [ ] "🗺 Return to Map" button appears and navigates back to the world map
+- [ ] The button is hidden when a new level starts or on map return
+- [ ] Completing a level that unlocks a new world shows a pulsing gold ring + "NEW!" on the map node
+
+## World Map UX
+- [ ] Hovering over a world node shows a tooltip with world name, chapter, and unlock state
+- [ ] Tooltip disappears when mouse leaves the canvas
+- [ ] Tooltip does not overflow beyond the canvas right edge
+- [ ] Level progress dots appear below world names showing completion per mandatory level
+- [ ] Boss-level dot is larger than standard dots
+- [ ] FPS auto-quality reduces particle quality after sustained < 30 FPS
+- [ ] Reduced quality is persisted to settings (survives reload)
+- [ ] FPS auto-quality restores particle quality after sustained > 50 FPS
+
+## Per-World Enemy Composition
+- [ ] Playing Origin Nexus: only laser/quartz enemies; no heavy enemies (void, iolite, etc.)
+- [ ] Playing Arithmetic Sands: ruby and sunstone enemies appear more often; no emerald/fracteryl
+- [ ] Playing Fraction Fen: quartz and sapphire are dominant; no void enemies
+- [ ] Playing Calculus Falls: iolite beams and void enemies are prominent
+- [ ] Playing Eigen Citadel: eigenstein and alivened swarm enemies dominate
+
+## Tutorial Banners
+- [ ] First time encountering an "exact" objective: 4s banner explains "Deal EXACTLY the shown damage!"
+- [ ] First time encountering a "threshold" objective: banner explains "Hit for ≥ the shown value!"
+- [ ] Tutorial banners persist across sessions (not shown again after first encounter)
+- [ ] Banner fades in and out smoothly over ~600 ms
+- [ ] Multiple objectives of the same kind in one session do not re-trigger the banner

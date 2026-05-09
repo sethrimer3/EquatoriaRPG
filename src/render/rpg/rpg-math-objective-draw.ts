@@ -5,6 +5,10 @@
  * Draws a progress ring above the enemy, the symbolic prompt label,
  * and transient feedback text (✓ / ✗ / flash) when the player hits.
  *
+ * Also manages first-encounter tutorial banners: the first time a
+ * particular objective kind is visible on screen, a brief (4 s) banner
+ * is shown in the upper centre of the canvas explaining how it works.
+ *
  * This file has no dependencies on sim/ state mutation — it is purely
  * visual. It reads the `mathObjective` field on enemy objects and
  * calls `tickObjectiveFeedback` from the sim layer to advance timers.
@@ -22,6 +26,156 @@ const EQUATION_SNAKE_FONT = '5px monospace'; // same size but rendered in gold a
 const FEEDBACK_FONT = '6px monospace';
 const FEEDBACK_OFFSET_Y = -12;        // px above ring centre
 const LABEL_CACHE_SIZE = 64;          // maximum entries in the text-width LRU cache
+
+// ── Tutorial banner ────────────────────────────────────────────
+
+/** localStorage key for persisting seen objective kinds across sessions. */
+const TUTORIAL_SEEN_STORAGE_KEY = 'equatoria_seen_objectives';
+
+/**
+ * Per-session set of objective kinds that the player has already been
+ * tutorialized for.  Pre-populated from localStorage so returning players
+ * don't see the same banners again.
+ */
+const _seenObjectiveKinds: Set<string> = (() => {
+  try {
+    const raw = localStorage.getItem(TUTORIAL_SEEN_STORAGE_KEY);
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw);
+      // Validate shape before trusting user-controlled storage.
+      if (Array.isArray(parsed) && parsed.every(x => typeof x === 'string')) {
+        return new Set<string>(parsed as string[]);
+      }
+    }
+  } catch {
+    // Ignore parse errors — start fresh.
+  }
+  return new Set<string>();
+})();
+
+/** Persist the seen-objectives set to localStorage. */
+function _persistSeenObjectives(): void {
+  try {
+    localStorage.setItem(TUTORIAL_SEEN_STORAGE_KEY, JSON.stringify([..._seenObjectiveKinds]));
+  } catch {
+    // Storage may be unavailable (private-browse quota, etc.) — ignore.
+  }
+}
+
+/** Duration for the first-encounter tutorial banner (ms). */
+const TUTORIAL_BANNER_DURATION_MS = 4000;
+/** Fade-out starts this many ms before the banner disappears. */
+const TUTORIAL_BANNER_FADE_MS = 600;
+
+interface TutorialBannerState {
+  kind: string;
+  text: string;
+  remainingMs: number;
+}
+
+/** Currently active tutorial banner (null = none). */
+let _activeTutorial: TutorialBannerState | null = null;
+
+/** Human-readable explanations for each objective kind. */
+const OBJECTIVE_EXPLANATIONS: Partial<Record<string, string>> = {
+  threshold:            'Hit for ≥ the shown value!',
+  exact:                'Deal EXACTLY the shown damage!',
+  digitEnding:          'Hit with a value ending in that digit!',
+  modulo:               'Damage must be divisible by shown number!',
+  hitCount:             'Land the required number of hits!',
+  sumTarget:            'Hits must total to the target sum!',
+  sequence:             'Hit values in the shown sequence!',
+  factor:               'Hit with a factor of the shown value!',
+  approximate:          'Hit close enough to the shown value!',
+  integralAccumulation: 'Keep hitting — accumulate the total!',
+  geometryArea:         'Hit matching the area: Width × Height!',
+};
+
+/**
+ * Register an objective as newly visible and queue a tutorial banner
+ * if this kind has not been seen before (across sessions).
+ */
+function maybeShowTutorialBanner(kind: string): void {
+  if (_seenObjectiveKinds.has(kind)) return;
+  _seenObjectiveKinds.add(kind);
+  _persistSeenObjectives();
+  const text = OBJECTIVE_EXPLANATIONS[kind];
+  if (!text) return;
+  _activeTutorial = {
+    kind,
+    text,
+    remainingMs: TUTORIAL_BANNER_DURATION_MS,
+  };
+}
+
+/**
+ * Draw the active tutorial banner (if any) centred near the top of the
+ * canvas. Call once per frame, after all enemy overlays are drawn.
+ */
+export function drawTutorialBanner(
+  ctx: CanvasRenderingContext2D,
+  deltaMs: number,
+  canvasWidth: number,
+  canvasHeight: number,
+): void {
+  if (!_activeTutorial) return;
+
+  _activeTutorial.remainingMs -= deltaMs;
+  if (_activeTutorial.remainingMs <= 0) {
+    _activeTutorial = null;
+    return;
+  }
+
+  let alpha: number;
+  if (_activeTutorial.remainingMs < TUTORIAL_BANNER_FADE_MS) {
+    alpha = _activeTutorial.remainingMs / TUTORIAL_BANNER_FADE_MS;
+  } else if (_activeTutorial.remainingMs > TUTORIAL_BANNER_DURATION_MS - TUTORIAL_BANNER_FADE_MS) {
+    alpha = (TUTORIAL_BANNER_DURATION_MS - _activeTutorial.remainingMs) / TUTORIAL_BANNER_FADE_MS;
+  } else {
+    alpha = 1;
+  }
+
+  const cx = canvasWidth / 2;
+  const cy = Math.round(canvasHeight * 0.16);
+  const text = _activeTutorial.text;
+
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+  ctx.font = 'bold 7px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // Background pill
+  const tw = ctx.measureText(text).width;
+  const pw = tw + 12;
+  const ph = 12;
+  ctx.fillStyle = 'rgba(8,8,20,0.82)';
+  ctx.beginPath();
+  ctx.roundRect(cx - pw / 2, cy - ph / 2, pw, ph, 4);
+  ctx.fill();
+  // Border
+  ctx.strokeStyle = 'rgba(255,220,64,0.7)';
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+
+  // Text
+  ctx.shadowColor = '#ffe066';
+  ctx.shadowBlur = 6;
+  ctx.fillStyle = '#fff172';
+  ctx.fillText(text, cx, cy);
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+/**
+ * Reset the active tutorial banner (call when starting a new level).
+ * The _seenObjectiveKinds set is intentionally preserved (persisted to
+ * localStorage) so the player is not shown the same hints again across
+ * sessions.  Only the currently-displayed banner is dismissed.
+ */
+export function resetObjectiveTutorials(): void {
+  _activeTutorial = null;
+}
 
 // ── Text-width cache (FIFO eviction, avoids measureText on every frame) ─
 
@@ -52,6 +206,9 @@ export function drawMathObjective(
   deltaMs: number,
 ): void {
   tickObjectiveFeedback(obj, deltaMs);
+
+  // Register the objective kind for tutorial-banner purposes.
+  maybeShowTutorialBanner(obj.objectiveKind.kind);
 
   const ringCy = ey - radius - RING_OFFSET_Y;
   const ringR  = radius + 1.5;

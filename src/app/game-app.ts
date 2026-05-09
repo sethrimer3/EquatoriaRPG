@@ -29,6 +29,8 @@ import {
   loadGame,
   deleteSave,
   saveSettings,
+  saveWorldMapProgression,
+  loadWorldMapProgression,
 } from '../settings';
 import { createForgeCrunchState } from '../sim/forge';
 import { createGeneratorState } from '../sim/particles';
@@ -38,13 +40,38 @@ import { createRpgMenuPanel } from '../ui/panels/rpg-menu-panel';
 import { addMotes } from '../sim/resources/resource-state';
 import { createMainMenu } from '../ui/main-menu';
 import { createWorldMapScreen } from '../ui/world-map/WorldMapScreen';
-import { createWorldMapProgressionState, registerLevelLauncher } from '../systems/worldMapProgression';
+import {
+  createWorldMapProgressionState,
+  registerLevelLauncher,
+  markLevelComplete,
+  getWorldUnlockState,
+} from '../systems/worldMapProgression';
 import { createLevelScreen } from '../ui/level-screen/LevelScreen';
 import { WORLD_LEVEL_PLANS, WORLD_COLOR_MAP } from '../data/worldLevelPlans';
+import type { WorldId, WorldMapProgressionState } from '../types/worldMapTypes';
+import { WORLD_MAP_DATA } from '../data/worldMapData';
 
 import type { AppState, UIPanels } from './app-types';
 import { handleAction as handleActionImpl } from './app-actions';
 import { createGameLoop } from './app-game-loop';
+
+// ─── Utilities ───────────────────────────────────────────────────
+
+/**
+ * Returns the list of worlds that are now unlocked (not 'locked') but were
+ * locked before the given level was completed.
+ *
+ * @param prevUnlocked Set of WorldIds that were already unlocked before the completion.
+ * @param state        The updated WorldMapProgressionState after marking the level complete.
+ */
+function detectNewlyUnlockedWorlds(
+  prevUnlocked: ReadonlySet<WorldId>,
+  state: WorldMapProgressionState,
+): WorldId[] {
+  return WORLD_MAP_DATA
+    .filter(w => !prevUnlocked.has(w.id) && getWorldUnlockState(state, w.id) !== 'locked')
+    .map(w => w.id);
+}
 
 // ─── Bootstrap ──────────────────────────────────────────────────
 
@@ -60,6 +87,13 @@ export async function startApp(): Promise<void> {
   const savedGame = loadGame();
   const game = savedGame ?? createGameState();
   const settings = loadSettings();
+
+  // ── World map progression — loaded from storage, defaults to fresh state ──
+  // Declared here (early) so it's available to both navigation helpers and the
+  // visibility-change save handler registered below.
+  const savedWorldMap = loadWorldMapProgression();
+  const worldMapProgressionState: WorldMapProgressionState =
+    savedWorldMap ?? createWorldMapProgressionState(settings.isDevMode);
 
   // ── Preload fonts ──
   try {
@@ -114,6 +148,43 @@ export async function startApp(): Promise<void> {
   rpgContainer.style.display = 'none';   // revealed by main menu onStartGame
   root.appendChild(rpgContainer);
 
+  // ── Mobile charge button ──
+  // Overlays the RPG arena in the bottom-right corner (opposite the joystick).
+  // Fires a charge-shot on pointerdown; pointerdone fires when released.
+  // The button synthesises keyboard charge events so the existing charge-attack
+  // logic in rpg-render.ts handles both desktop (Space/F) and mobile identically.
+  const mobileChargeBtn = document.createElement('button');
+  mobileChargeBtn.id = 'mobile-charge-btn';
+  mobileChargeBtn.setAttribute('aria-label', 'Charge shot');
+  mobileChargeBtn.textContent = '⚡';
+  mobileChargeBtn.style.display = 'none'; // hidden until arena is shown
+  // Wire it to synthetic keyboard events that rpg-input.ts handles.
+  mobileChargeBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF', bubbles: true }));
+  });
+  mobileChargeBtn.addEventListener('pointerup', (e) => {
+    e.preventDefault();
+    document.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyF', bubbles: true }));
+  });
+  mobileChargeBtn.addEventListener('pointercancel', () => {
+    document.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyF', bubbles: true }));
+  });
+  root.appendChild(mobileChargeBtn);
+
+  // ── Level-complete overlay: "Return to Map" CTA ──
+  // Shown after the level-complete banner fires; hidden when returning to map.
+  const levelCompleteOverlay = document.createElement('div');
+  levelCompleteOverlay.className = 'lvl-complete-overlay';
+  levelCompleteOverlay.style.display = 'none';
+  const returnToMapBtn = document.createElement('button');
+  returnToMapBtn.className = 'lvl-complete-overlay__btn';
+  returnToMapBtn.textContent = '🗺 Return to Map';
+  returnToMapBtn.setAttribute('aria-label', 'Return to world map');
+  levelCompleteOverlay.appendChild(returnToMapBtn);
+  // Append after rpgContainer so it overlays it (same stacking context)
+  root.appendChild(levelCompleteOverlay);
+
   // ── Particle system ──
   const particles = new ParticleSystem();
 
@@ -129,6 +200,7 @@ export async function startApp(): Promise<void> {
     applyFocusedAudio();
     if (document.visibilityState === 'hidden') {
       saveGame(game);
+      saveWorldMapProgression(worldMapProgressionState);
     }
   });
 
@@ -149,7 +221,35 @@ export async function startApp(): Promise<void> {
       const bonus = Math.max(1, current * bonusPct / 100);
       addMotes(appState.game.resources, tierId, bonus);
     },
-    onError: () => { audioSystem.onError(); },
+    onError:         () => { audioSystem.onError(); },
+    onChargeReady:   () => { audioSystem.onChargeReady(); },
+    onChargeRelease: () => { audioSystem.onChargeRelease(); },
+    onLevelComplete: () => {
+      // Snapshot which worlds are unlocked BEFORE marking the level complete.
+      const prevUnlocked = new Set<WorldId>(
+        WORLD_MAP_DATA
+          .filter(w => getWorldUnlockState(worldMapProgressionState, w.id) !== 'locked')
+          .map(w => w.id),
+      );
+
+      // Mark the active level complete in the world-map progression.
+      if (activeLevelWorldId && activeLevelId) {
+        markLevelComplete(worldMapProgressionState, activeLevelWorldId as WorldId, activeLevelId);
+      }
+      // Persist the updated progression so it survives a page reload.
+      saveWorldMapProgression(worldMapProgressionState);
+      console.info(
+        `[Campaign] Level complete — world="${activeLevelWorldId}" level="${activeLevelId}". Progression saved.`,
+      );
+
+      // Queue a pulse animation for any worlds newly unlocked by this completion.
+      for (const wId of detectNewlyUnlockedWorlds(prevUnlocked, worldMapProgressionState)) {
+        worldMapScreen.scheduleNewWorldHighlight(wId);
+      }
+
+      // Show the "Return to Map" CTA button over the arena.
+      levelCompleteOverlay.style.display = '';
+    },
   });
   rpgRender.setNumberFormat(settings.numberFormat);
   root.appendChild(rpgRender.statsPanel);
@@ -161,7 +261,9 @@ export async function startApp(): Promise<void> {
   // ── Settings panel (created before rpgMenuPanel so it can be passed in) ──
   const settingsPanel = createSettingsPanel(settings, (action: GameAction) => {
     dispatch(action);
-  }, audioSystem, applyFocusedAudio);
+  }, audioSystem, applyFocusedAudio, {
+    onWorldMapParticleQuality: (q) => { worldMapScreen?.setParticleQuality(q); },
+  });
 
   // ── Forward-declared references — assigned later; closures capture the binding. ──
   // All navigation helpers below are CALLED only after every object is created,
@@ -178,17 +280,45 @@ export async function startApp(): Promise<void> {
     rpgContainer.style.display = 'none';
     rpgRender.statsPanel.style.display = 'none';
     rpgMenuPanel.setVisible(false);
+    // Hide the post-completion CTA and mobile charge button whenever we leave the arena.
+    levelCompleteOverlay.style.display = 'none';
+    mobileChargeBtn.style.display = 'none';
+    saveWorldMapProgression(worldMapProgressionState);
+    // Refresh the map canvas/detail panel so any progression changes
+    // made during the RPG session are reflected immediately.
+    worldMapScreen.refresh(worldMapProgressionState);
     worldMapScreen.show();
+    // Update the history state so the browser back button returns to the map
+    // (not the RPG arena) without a page reload.
+    history.replaceState({ screen: 'worldmap' }, '', location.href);
   }
 
   function goToMainMenu(): void {
     gameLoop.stop();
     worldMapScreen.hide();
-    // Save any in-progress persistent data, then reload.
-    // (In-level temporary progress is discarded; persistent upgrades/completions are kept.)
+    // Save both game state and world map progression, then reload.
     saveGame(appState.game);
+    saveWorldMapProgression(worldMapProgressionState);
     window.location.reload();
   }
+
+  // ── Back-button / swipe-back navigation ──────────────────────────
+  // When the RPG level starts we push a { screen: 'arena' } history entry on
+  // top of whatever was already there.  When the user presses the system back
+  // gesture, the browser pops the 'arena' entry and fires popstate with the
+  // underlying state (which is { screen: 'worldmap' }).  We intercept that and
+  // call showWorldMap() instead of letting the browser navigate away.
+  window.addEventListener('popstate', (e: PopStateEvent) => {
+    const screen = (e.state as { screen?: string } | null)?.screen;
+    if (screen === 'worldmap') {
+      // User pressed back while in the arena — return to world map.
+      showWorldMap();
+    }
+    // Other states (e.g. no state / pre-app entries) are left to browser default.
+  });
+
+  // Wire the Return-to-Map CTA button (showWorldMap must be defined first).
+  returnToMapBtn.addEventListener('click', () => { showWorldMap(); });
 
   // ── Helper: apply the RPG bar position setting ──
   function applyRpgBarPosition(atTop: boolean): void {
@@ -230,24 +360,72 @@ export async function startApp(): Promise<void> {
   rpgRender.menuButtonContainer.appendChild(menuToggleBtn);
 
   // ── World map progression + screen ──
-  const worldMapProgression = createWorldMapProgressionState(settings.isDevMode);
+  // worldMapProgressionState was loaded from storage (or freshly created) above.
   worldMapScreen = createWorldMapScreen(
     () => { worldMapScreen.hide(); },
-    worldMapProgression,
+    worldMapProgressionState,
     goToMainMenu,
+    // Persist auto-reduced particle quality so low-end devices remember the
+    // reduced setting across sessions without requiring a manual settings change.
+    (quality) => {
+      settings.worldMapParticleQuality = quality;
+      saveSettings(settings);
+    },
   );
+  // Apply persisted particle quality.
+  worldMapScreen.setParticleQuality(settings.worldMapParticleQuality ?? 'full');
   root.appendChild(worldMapScreen.element);
 
+  // ── Active level context (set when the player launches a level) ──
+  // This state lets the game loop and RPG arena know which level/world is active.
+  let activeLevelWorldId = '';
+  let activeLevelId = '';
+
   // ── Level screen (opened by startWorldLevel via registerLevelLauncher) ──
-  const levelScreen = createLevelScreen(() => {
-    levelScreen.hide();
-    worldMapScreen.show();
-  });
+  const levelScreen = createLevelScreen(
+    // onClose: go back to world map
+    () => {
+      levelScreen.hide();
+      worldMapScreen.show();
+    },
+    // onPlay: transition from level preview into the RPG arena
+    (levelDef) => {
+      levelScreen.hide();
+      // Hide any lingering level-complete CTA from a previous run.
+      levelCompleteOverlay.style.display = 'none';
+      // Show the RPG arena containers
+      rpgContainer.style.display = '';
+      rpgRender.statsPanel.style.display = '';
+      // Show mobile charge button when arena is active.
+      mobileChargeBtn.style.display = '';
+      // Activate and resize the RPG renderer
+      rpgRender.setActive(true);
+      rpgRender.resize(rpgContainer);
+      // Set wave target based on level definition.
+      rpgRender.setLevelWaveTarget(levelDef.waveCount ?? (levelDef.type === 'boss' ? 5 : 3));
+      // Apply per-world enemy bias so each level has a distinct flavour.
+      rpgRender.setWaveEnemyBias(levelDef.waveEnemyBias ?? {});
+      // Show the level name as a brief intro banner at the start of the run.
+      rpgRender.setLevelName(levelDef.name);
+      // Start the game loop
+      gameLoop.start();
+      // Push an 'arena' history entry so the system back gesture navigates
+      // to the world map instead of leaving the app.
+      history.pushState({ screen: 'arena' }, '', location.href);
+      // Confirm active level context (set by registerLevelLauncher above, but
+      // levelDef.levelId is the canonical source in the onPlay path).
+      activeLevelId = levelDef.levelId ?? activeLevelId;
+      console.info(`[Campaign] Starting level "${activeLevelId}" in world "${activeLevelWorldId}"`);
+    },
+  );
   root.appendChild(levelScreen.element);
 
   registerLevelLauncher((worldId, levelId) => {
     const levelDef = WORLD_LEVEL_PLANS.get(levelId);
     const worldColor = WORLD_COLOR_MAP.get(worldId) ?? WORLD_COLOR_MAP.get('origin_nexus') ?? '#80c8ff';
+    // Track which world/level the player is about to enter
+    activeLevelWorldId = worldId;
+    activeLevelId = levelId;
     if (levelDef) {
       worldMapScreen.hide();
       levelScreen.show(levelDef, worldColor);

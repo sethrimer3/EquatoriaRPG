@@ -119,4 +119,18 @@ export interface LevelDefinition {
   readonly twist?: string;
   readonly room: RoomDefinition;
   readonly placeholderMechanics?: readonly string[];
+  /**
+   * How many waves must be cleared for this level to be considered complete.
+   * When omitted the RPG arena uses its default per-type fallback
+   * (boss → 5 waves, others → 3 waves).
+   */
+  readonly waveCount?: number;
+  /**
+   * Optional per-enemy-type spawn multipliers for this level.
+   * Values > 1 boost counts; values < 1 reduce them; 0 removes the type.
+   * Used to give each world a distinct enemy composition flavour.
+   *
+   * Example: `{ quartz: 1.8, laser: 0.5 }` for a crystal-heavy level.
+   */
+  readonly waveEnemyBias?: Readonly<Partial<Record<string, number>>>;
 }

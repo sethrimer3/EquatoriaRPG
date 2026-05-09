@@ -123,6 +123,12 @@ export interface WaveManagerCtx {
   setInterWaveTimerMs(ms: number): void;
   enterBossWave(): void;
   exitBossWave(): void;
+  /**
+   * Optional per-enemy-type multipliers applied when building each wave's
+   * spawn queue.  Values > 1 increase counts; values < 1 decrease them.
+   * An empty object (default) means no adjustment.
+   */
+  getWaveEnemyBias(): Readonly<Partial<Record<string, number>>>;
 }
 
 // ── Handle returned to rpg-render.ts ─────────────────────────────────────
@@ -424,9 +430,14 @@ export function createWaveManager(ctx: WaveManagerCtx): WaveManagerHandle {
       rpgSimState.highestWaveReached = wave;
     }
     const waveDef = getWaveDefinition(wave);
+    const bias = ctx.getWaveEnemyBias();
     spawnQueue.length = 0;
     for (const spawn of waveDef.spawns) {
-      for (let i = 0; i < spawn.count; i++) {
+      // Apply the per-world enemy bias: multiply count by bias factor, round,
+      // and clamp to at least 0 (so a 0 bias removes the enemy type entirely).
+      const biasMult = bias[spawn.enemyTypeId] ?? 1;
+      const count    = Math.max(0, Math.round(spawn.count * biasMult));
+      for (let i = 0; i < count; i++) {
         spawnQueue.push({ enemyTypeId: spawn.enemyTypeId, timerMs: spawn.spawnDelay * i });
       }
     }

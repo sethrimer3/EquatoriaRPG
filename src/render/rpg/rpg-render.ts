@@ -85,7 +85,8 @@ import {
   drawAlivenSwarmEnemies,
   setLowGraphicsMode as setAdvEnemyLowGraphics,
 } from './rpg-enemy-draw-adv';
-import { drawMathObjectivesForArray } from './rpg-math-objective-draw';
+import { drawMathObjectivesForArray, drawTutorialBanner, resetObjectiveTutorials } from './rpg-math-objective-draw';
+import { setCurrentPlayerAtk } from './rpg-math-objective-factory';
 import {
   drawBossProjectiles,
   drawSandProjectiles,
@@ -217,6 +218,29 @@ export interface RpgRender {
   setNumberFormat(format: NumberFormat): void;
   /** Show or hide dev-mode numerical designators on each RPG stats panel box. */
   setDevMode(enabled: boolean): void;
+  /**
+   * Set how many waves must be cleared before the level-completion callback fires.
+   * Call this each time a new level is started so different levels can have
+   * different challenge lengths.  Defaults to WAVES_TO_COMPLETE_LEVEL (3).
+   */
+  setLevelWaveTarget(waveCount: number): void;
+  /**
+   * Set an optional per-enemy-type spawn multiplier applied when building each
+   * wave's spawn queue.  Pass an empty object (or call with no argument) to
+   * clear all biases.  Call before setActive(true) for the new level so the
+   * first wave is already biased.
+   *
+   * Examples:
+   *   { quartz: 1.8, laser: 0.6 }  — crystal-heavy world
+   *   { void: 2.0, nullstone: 1.5 } — void/dark world
+   */
+  setWaveEnemyBias(bias: Partial<Record<string, number>>): void;
+  /**
+   * Set the display name of the current level.  The name is shown on a brief
+   * intro banner (3 s) at the start of each level run.  Pass an empty string
+   * to suppress the banner.
+   */
+  setLevelName(name: string): void;
 }
 
 /** Options passed to createRpgRender. */
@@ -232,6 +256,26 @@ export interface RpgRenderOptions {
    * to add a 4th XP wire).  Callers should play the error SFX.
    */
   onError?: () => void;
+  /**
+   * Called when the charge meter first reaches 100%.
+   * Callers should play a "ready" audio cue.
+   */
+  onChargeReady?: () => void;
+  /**
+   * Called when a charged shot fires.
+   * Callers should play the charge-release SFX.
+   */
+  onChargeRelease?: () => void;
+  /**
+   * Called once when the player clears enough waves to satisfy the world-map
+   * level-completion threshold (WAVES_TO_COMPLETE_LEVEL).  The caller should
+   * mark the active level complete, save world-map progression, and refresh
+   * the world-map screen.
+   *
+   * The callback is fired at most once per `setActive(true)` call; calling
+   * setActive again resets the counter.
+   */
+  onLevelComplete?: () => void;
 }
 
 export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState, options: RpgRenderOptions = {}): RpgRender {
@@ -283,7 +327,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
   };
 
   const joystick: RpgJoystick = { isActive: false, pointerId: -1, baseX: 0, baseY: 0, thumbX: 0, thumbY: 0 };
-  const keys: RpgKeyState = { left: false, right: false, up: false, down: false };
+  const keys: RpgKeyState = { left: false, right: false, up: false, down: false, charge: false };
   const playerStats: RpgPlayerStats = { hp: PLAYER_HP_INIT, maxHp: PLAYER_HP_INIT, atk: PLAYER_ATK_INIT, def: PLAYER_DEF_INIT, regen: PLAYER_REGEN_INIT };
 
   // ── Player movement state (managed by rpg-player-movement.ts) ──
@@ -301,11 +345,58 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
   let _currentDeltaMs = 0; // captured by draw() for math objective overlay ticks
   let _isActive = false;
   let rpgPhase: RpgPhase = 'alive';
+
+  // ── Charge attack state ──────────────────────────────────────────
+  /** How long the charge key has been held (ms). Resets on release or shot. */
+  let chargeMs = 0;
+  /** Maximum charge time (ms); full charge = max damage multiplier. */
+  const CHARGE_MAX_MS = 1500;
+  /** Minimum hold time to trigger a charged shot (ms). */
+  const CHARGE_MIN_MS = 300;
+  /** Maximum charge damage multiplier (achieved at CHARGE_MAX_MS). */
+  const CHARGE_MAX_MULT = 3.0;
+
+  // ── Level-completion tracking ────────────────────────────────────
+  /**
+   * Default: how many waves must be cleared before level completion fires.
+   * Overridable per-level via setLevelWaveTarget().
+   */
+  const DEFAULT_WAVES_TO_COMPLETE = 3;
+  /** Current wave target for this level run (may be overridden by setLevelWaveTarget). */
+  let _wavesToCompleteLevel = DEFAULT_WAVES_TO_COMPLETE;
+  /** Wave number at the moment the player entered the current level. */
+  let _levelStartWave = 0;
+  /** Set once per setActive(true) cycle when the completion threshold is met. */
+  let _levelCompleted = false;
+  /** How long (ms) the "Level Complete!" victory banner has been showing. */
+  let _levelCompleteBannerMs = 0;
+  const LEVEL_COMPLETE_BANNER_DURATION_MS = 5000;
+  /** Title font as a fraction of canvas width (0.055 → ~5.5% of canvas width). */
+  const LEVEL_COMPLETE_TITLE_SCALE    = 0.055;
+  /** Subtitle font as a fraction of canvas width (0.030 → ~3.0% of canvas width). */
+  const LEVEL_COMPLETE_SUBTITLE_SCALE = 0.030;
+
+  // ── Level intro banner ────────────────────────────────────────────
+  /** Current level display name (empty string = no banner). */
+  let _levelName = '';
+  /** How long (ms) the level intro banner has been showing. */
+  let _levelIntroBannerMs = 0;
+  const LEVEL_INTRO_BANNER_DURATION_MS = 3000;
+  const LEVEL_INTRO_TITLE_SCALE = 0.042;
+  const LEVEL_INTRO_SUBTITLE_SCALE = 0.024;
   let phaseTimerMs     = 0;
   let deathAlpha       = 1;
   let screenDarken     = 0;
   let restartFadeAlpha = 0;
   const deathParticles: DeathParticle[] = [];
+
+  // ── Wave enemy bias (per-level / per-world flavour) ─────────────
+  /**
+   * Optional multiplier per enemy type applied when building each wave's spawn
+   * queue.  Values > 1 boost counts; values < 1 reduce them; 0 removes a type.
+   * Set via setWaveEnemyBias(); reset to {} when setActive(false) is called.
+   */
+  let _waveEnemyBias: Partial<Record<string, number>> = {};
 
   // ── Player attack state ────────────────────────────────────────
   const hitEffects: HitEffect[] = [];
@@ -496,6 +587,9 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
     playerStats.regen = PLAYER_REGEN_INIT;
     // Player ATK is the base multiplier (not including per-weapon tier damage).
     playerStats.atk = PLAYER_ATK_INIT + getEffectiveXpAtkBonus(rpgSimState);
+    // Keep the math-objective factory in sync so targets are scaled to the
+    // player's actual ATK, making objectives solvable at any progression stage.
+    setCurrentPlayerAtk(playerStats.atk);
     // Bonus max-HP from XP wired to HP stat.
     const hpBonus = getEffectiveXpHpBonus(rpgSimState);
     const newMaxHp = PLAYER_HP_INIT + hpBonus;
@@ -714,6 +808,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
     setInterWaveTimerMs:     (ms) => { interWaveTimerMs = ms; },
     enterBossWave:           () => bossWave.enterBossWave(),
     exitBossWave:            () => bossWave.exitBossWave(),
+    getWaveEnemyBias:        () => _waveEnemyBias,
   });
 
   // ── Create weapon systems ──────────────────────────────────────
@@ -967,6 +1062,9 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
 
   function triggerDeath(): void {
     rpgPhase = 'dying'; phaseTimerMs = 0; deathAlpha = 1;
+    // Cancel any pending charge so it doesn't fire after respawn.
+    chargeMs = 0;
+    keys.charge = false;
     deathParticles.length = 0;
     for (let i = 0; i < DEATH_BURST_COUNT; i++) {
       const angle = (i / DEATH_BURST_COUNT) * Math.PI * 2 + Math.random() * 0.35;
@@ -978,6 +1076,53 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
         color: DEATH_PARTICLE_COLORS[Math.floor(Math.random() * DEATH_PARTICLE_COLORS.length)],
       });
     }
+  }
+
+  // Track whether the "charge ready" audio cue has fired for the current charge.
+  let _chargeReadyFired = false;
+
+  /**
+   * Tick the charge-attack mechanic each frame.
+   *
+   * While `keys.charge` is held the chargeMs counter grows (capped at CHARGE_MAX_MS).
+   * On release with >= CHARGE_MIN_MS built, fires a boosted shot on all equipped weapons
+   * with ATK scaled by the charge fraction (up to CHARGE_MAX_MULT × normal ATK).
+   * Insufficient charge is discarded; chargeMs is reset in all release branches.
+   */
+  function updateChargeAttack(deltaMs: number): void {
+    if (rpgPhase === 'alive' && keys.charge) {
+      chargeMs = Math.min(chargeMs + deltaMs, CHARGE_MAX_MS);
+      // Fire the "charge ready" audio cue once when the meter fills.
+      if (!_chargeReadyFired && chargeMs >= CHARGE_MAX_MS) {
+        _chargeReadyFired = true;
+        options.onChargeReady?.();
+      }
+      return;
+    }
+    if (chargeMs >= CHARGE_MIN_MS) {
+      // Key just released with enough charge — fire a boosted shot.
+      options.onChargeRelease?.();
+      const chargeFrac = Math.min(1, chargeMs / CHARGE_MAX_MS);
+      const chargeMult = 1 + (CHARGE_MAX_MULT - 1) * chargeFrac;
+      const prevAtk = playerStats.atk;
+      // Use try-finally to guarantee ATK is restored even if an error is thrown.
+      try {
+        playerStats.atk *= chargeMult;
+        for (const weaponId of getEffectiveEquippedIds()) {
+          statsPanel.withDamageSource(weaponId, () => performWeaponAttack(weaponId));
+        }
+        if (getEffectiveEquippedIds().size === 0) {
+          statsPanel.withDamageSource(BASE_ATTACK_TIMER_KEY, () => performWeaponAttack(BASE_ATTACK_TIMER_KEY));
+        }
+        removeDeadEnemies();
+        checkWaveCompletion();
+      } finally {
+        playerStats.atk = prevAtk;
+      }
+    }
+    // Reset whether charge fired or was abandoned.
+    chargeMs = 0;
+    _chargeReadyFired = false;
   }
 
   function doRestart(): void {
@@ -1118,6 +1263,38 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
 
     drawPlayerMote(ctx, mote, playerMovementState.glowMovementIntensity, rpgPhase, deathAlpha, glowTimeS, playerIFramesMs);
 
+    // ── Charge ring visual ──────────────────────────────────────────
+    // Draw an expanding arc and glow around the player while charging.
+    if (rpgPhase === 'alive' && chargeMs > 0) {
+      const chargeFrac = Math.min(1, chargeMs / CHARGE_MAX_MS);
+      // Ring radius grows from 4 to 14 px as charge fills.
+      const ringR  = 4 + chargeFrac * 10;
+      const alpha  = 0.3 + chargeFrac * 0.65;
+      // Colour cycles gold → white at full charge.
+      const g = Math.round(200 + chargeFrac * 55);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      // Outer glow arc (full circle, progress fill).
+      ctx.beginPath();
+      ctx.arc(mote.x, mote.y, ringR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * chargeFrac);
+      ctx.strokeStyle = `rgb(255,${g},64)`;
+      ctx.lineWidth   = 2 + chargeFrac * 2;
+      ctx.shadowColor = `rgb(255,${g},64)`;
+      ctx.shadowBlur  = 8 + chargeFrac * 14;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      // Label: "CHARGED!" at full charge.
+      if (chargeFrac >= 1) {
+        ctx.font = 'bold 6px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillStyle = '#fff';
+        ctx.globalAlpha = 0.9;
+        ctx.fillText('CHARGED!', mote.x, mote.y - ringR - 2);
+      }
+      ctx.restore();
+    }
+
     drawHitEffects(ctx, hitEffects);
     drawLuckyMotes(ctx, luckyMotes, isLowGraphicsMode);
     drawDamageNumbers(ctx, damageNumbers);
@@ -1162,6 +1339,82 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
     }
 
     if (rpgPhase === 'alive') drawWaveClearBanner(ctx, isInterWave, currentWave, interWaveTimerMs, widthPx, heightPx);
+
+    // ── First-encounter tutorial banner for math objectives ──────────
+    if (rpgPhase === 'alive') {
+      drawTutorialBanner(ctx, _currentDeltaMs, widthPx, heightPx);
+    }
+
+    // ── Charge-attack key hint (desktop, waves 1–3) ──────────────────
+    // Shown only in the first 3 waves (enough to teach but not distracting).
+    if (rpgPhase === 'alive' && currentWave <= 3 && chargeMs === 0) {
+      ctx.save();
+      ctx.font = '5px monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#ccc';
+      ctx.fillText('[Space/F] Charge shot', widthPx - 4, heightPx - 4);
+      ctx.restore();
+    }
+
+    // ── Level Complete! victory banner ────────────────────────────
+    if (_levelCompleted && _levelCompleteBannerMs < LEVEL_COMPLETE_BANNER_DURATION_MS) {
+      const t = _levelCompleteBannerMs / LEVEL_COMPLETE_BANNER_DURATION_MS;
+      // Fade in quickly, hold, then fade out for the last 20%.
+      const alpha = t < 0.12
+        ? t / 0.12
+        : t > 0.80
+          ? (1 - t) / 0.20
+          : 1;
+      const y = heightPx * 0.38;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+      ctx.font = `bold ${Math.round(widthPx * LEVEL_COMPLETE_TITLE_SCALE)}px monospace`;
+      ctx.textAlign = 'center';
+      // Gold glow
+      ctx.shadowColor = '#ffe066';
+      ctx.shadowBlur  = 18;
+      ctx.fillStyle   = '#fff172';
+      ctx.fillText('✨ Level Complete!', widthPx / 2, y);
+      // Subtitle hint
+      ctx.font = `${Math.round(widthPx * LEVEL_COMPLETE_SUBTITLE_SCALE)}px monospace`;
+      ctx.fillStyle = '#c8f0ff';
+      ctx.shadowBlur = 8;
+      ctx.fillText('Return to map to claim your progress', widthPx / 2, y + Math.round(widthPx * LEVEL_COMPLETE_TITLE_SCALE) + 6);
+      ctx.shadowBlur  = 0;
+      ctx.textAlign   = 'left';
+      ctx.restore();
+    }
+
+    // ── Level name intro banner (shown for 3 s at level start) ────
+    if (_levelName && _levelIntroBannerMs < LEVEL_INTRO_BANNER_DURATION_MS) {
+      const t = _levelIntroBannerMs / LEVEL_INTRO_BANNER_DURATION_MS;
+      // Fade in for first 12 %, hold, fade out for last 25 %.
+      const alpha = t < 0.12
+        ? t / 0.12
+        : t > 0.75
+          ? (1 - t) / 0.25
+          : 1;
+      const titleSz = Math.round(widthPx * LEVEL_INTRO_TITLE_SCALE);
+      const subSz   = Math.round(widthPx * LEVEL_INTRO_SUBTITLE_SCALE);
+      const y = heightPx * 0.20;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+      ctx.textAlign   = 'center';
+      ctx.font        = `bold ${titleSz}px monospace`;
+      ctx.shadowColor = '#80c8ff';
+      ctx.shadowBlur  = 12;
+      ctx.fillStyle   = '#c8eeff';
+      ctx.fillText(_levelName, widthPx / 2, y);
+      ctx.font        = `${subSz}px monospace`;
+      ctx.fillStyle   = '#8899aa';
+      ctx.shadowBlur  = 4;
+      ctx.fillText('Good luck!', widthPx / 2, y + titleSz + 4);
+      ctx.shadowBlur  = 0;
+      ctx.textAlign   = 'left';
+      ctx.restore();
+    }
 
     // ── Top-left wave number overlay ──────────────────────────────
     if (currentWave > 0) {
@@ -1259,10 +1512,31 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
 
       if (isInterWave) {
         interWaveTimerMs -= deltaMs;
-        if (interWaveTimerMs <= 0) startNextWave();
+        if (interWaveTimerMs <= 0) {
+          startNextWave();
+          // Check level-completion threshold after each wave starts.
+          // The check uses the live currentWave (already incremented inside startNextWave).
+          if (!_levelCompleted && currentWave >= _levelStartWave + _wavesToCompleteLevel) {
+            _levelCompleted = true;
+            options.onLevelComplete?.();
+          }
+        }
       } else {
         tickSpawnQueue(deltaMs);
         checkWaveCompletion();
+      }
+
+      // Advance the "Level Complete!" victory banner timer.
+      if (_levelCompleted && _levelCompleteBannerMs < LEVEL_COMPLETE_BANNER_DURATION_MS) {
+        _levelCompleteBannerMs = Math.min(
+          _levelCompleteBannerMs + deltaMs,
+          LEVEL_COMPLETE_BANNER_DURATION_MS,
+        );
+      }
+
+      // Advance the level intro banner timer.
+      if (_levelName && _levelIntroBannerMs < LEVEL_INTRO_BANNER_DURATION_MS) {
+        _levelIntroBannerMs = Math.min(_levelIntroBannerMs + deltaMs, LEVEL_INTRO_BANNER_DURATION_MS);
       }
 
       updatePlayerMovement(movementCtx, playerMovementState, deltaMs);
@@ -1375,6 +1649,9 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
       updateLuckyMotes(luckyMotes, luckyMotePopups, mote.x, mote.y, deltaMs, options.onLuckyMoteCollected ?? (() => {}));
       updateLuckyMotePopups(luckyMotePopups, deltaMs);
 
+      // ── Charge attack tick ────────────────────────────────────────
+      updateChargeAttack(deltaMs);
+
       // Apply HP regen: regenerate regen% of maxHp per second when alive.
       if (rpgPhase === 'alive' && playerStats.hp > 0 && playerStats.hp < playerStats.maxHp) {
         playerStats.hp = Math.min(
@@ -1398,13 +1675,28 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
 
     setActive(active: boolean): void {
       _isActive = active;
-      if (!active) { keys.left = keys.right = keys.up = keys.down = false; }
+      if (!active) {
+        keys.left = keys.right = keys.up = keys.down = keys.charge = false;
+        chargeMs = 0;
+        // Clear the wave bias so a stale campaign bias doesn't leak into
+        // endless mode or a subsequent level.
+        _waveEnemyBias = {};
+      }
       if (active) {
         applyEquipmentStats();
         if (currentWave === 0 && rpgPhase === 'alive') {
           isInterWave = true;
           interWaveTimerMs = INTER_WAVE_DELAY_MS * 0.4;
         }
+        // Reset level-completion tracking each time a level run begins.
+        _levelStartWave = currentWave;
+        _levelCompleted = false;
+        _levelCompleteBannerMs = 0;
+        // Reset level intro banner timer (the name was already set by setLevelName).
+        _levelIntroBannerMs = 0;
+        // Reset tutorial banners so the player sees first-encounter hints
+        // for any objectives they haven't seen this level run.
+        resetObjectiveTutorials();
       }
     },
 
@@ -1457,6 +1749,19 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
 
     setDevMode(enabled: boolean): void {
       statsPanel.setDevMode(enabled);
+    },
+
+    setLevelWaveTarget(waveCount: number): void {
+      _wavesToCompleteLevel = Math.max(1, Math.round(waveCount));
+    },
+
+    setWaveEnemyBias(bias: Partial<Record<string, number>>): void {
+      _waveEnemyBias = bias;
+    },
+
+    setLevelName(name: string): void {
+      _levelName = name;
+      _levelIntroBannerMs = 0;
     },
   };
 }

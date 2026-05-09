@@ -17,6 +17,8 @@ export interface SettingsState {
   isDevMode: boolean;
   /** When true, the RPG stats bar is anchored to the top of the screen instead of the bottom. */
   rpgBarAtTop: boolean;
+  /** World map particle simulation quality. Defaults to 'full'. */
+  worldMapParticleQuality: 'full' | 'reduced' | 'low';
 }
 
 export function createDefaultSettings(): SettingsState {
@@ -33,6 +35,7 @@ export function createDefaultSettings(): SettingsState {
     rpgEnemyIndicatorStyle: 'triangle',
     isDevMode: false,
     rpgBarAtTop: false,
+    worldMapParticleQuality: 'full',
   };
 }
 

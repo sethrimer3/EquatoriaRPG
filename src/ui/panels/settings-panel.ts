@@ -4,6 +4,11 @@ import { saveSettings } from '../../settings';
 import type { AudioSystem } from '../../audio';
 import { makePageBreak } from '../ui-helpers';
 import { particleTweaks, PARTICLE_TWEAKS_DEFAULTS, resetParticleTweaks } from '../../data/particles/particle-tweaks';
+import { PARTICLE_COUNTS } from '../../render/world-map/worldMapParticles';
+
+// ─── Tutorial reset ───────────────────────────────────────────────
+
+const TUTORIAL_SEEN_STORAGE_KEY = 'equatoria_seen_objectives';
 
 // ─── Slider glow constants ───────────────────────────────────────
 
@@ -33,6 +38,10 @@ export function createSettingsPanel(
   dispatch: ActionHandler,
   audioSystem?: AudioSystem,
   onFocusSettingChange?: () => void,
+  /** Extra callbacks for settings that need to update live systems. */
+  extraCallbacks?: {
+    onWorldMapParticleQuality?: (quality: 'full' | 'reduced' | 'low') => void;
+  },
 ): SettingsPanel {
   const panel = document.createElement('div');
   panel.className = 'panel settings-panel';
@@ -141,6 +150,23 @@ export function createSettingsPanel(
   );
   panel.appendChild(enemyIndicatorRow);
 
+  // World map particle quality
+  const wmParticleRow = createSelectRow(
+    'World Map Particles',
+    settings.worldMapParticleQuality ?? 'full',
+    [
+      { value: 'full',    label: `Full (${PARTICLE_COUNTS.full})` },
+      { value: 'reduced', label: `Reduced (${PARTICLE_COUNTS.reduced})` },
+      { value: 'low',     label: `Low (${PARTICLE_COUNTS.low})` },
+    ],
+    (v) => {
+      settings.worldMapParticleQuality = v as SettingsState['worldMapParticleQuality'];
+      saveSettings(settings);
+      extraCallbacks?.onWorldMapParticleQuality?.(settings.worldMapParticleQuality);
+    },
+  );
+  panel.appendChild(wmParticleRow);
+
   // Screen shake toggle
   const shakeRow = createToggleRow('Screen Shake', settings.isScreenShakeEnabled, (v) => {
     settings.isScreenShakeEnabled = v;
@@ -193,6 +219,28 @@ export function createSettingsPanel(
     }
   });
   panel.appendChild(resetBtn);
+
+  // Tutorial hints reset button — lets the player re-read first-encounter banners.
+  const tutorialResetBtn = document.createElement('button');
+  tutorialResetBtn.className = 'settings-btn settings-btn--info';
+  tutorialResetBtn.textContent = '💡 Reset Tutorial Hints';
+  tutorialResetBtn.setAttribute('aria-label', 'Reset math objective tutorial hints');
+  tutorialResetBtn.title = 'Show first-encounter math objective hints again';
+  tutorialResetBtn.addEventListener('click', () => {
+    try {
+      localStorage.removeItem(TUTORIAL_SEEN_STORAGE_KEY);
+    } catch {
+      // Storage unavailable — silently ignore.
+    }
+    tutorialResetBtn.textContent = '✓ Hints Reset';
+    tutorialResetBtn.disabled = true;
+    setTimeout(() => {
+      tutorialResetBtn.textContent = '💡 Reset Tutorial Hints';
+      tutorialResetBtn.disabled = false;
+    }, 2000);
+    audioSystem?.onSettingsChanged();
+  });
+  panel.appendChild(tutorialResetBtn);
 
   // Credits
   const credits = document.createElement('div');

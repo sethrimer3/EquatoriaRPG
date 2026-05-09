@@ -8,6 +8,28 @@
 import type { LevelDefinition } from '../../types/levelTypes';
 import { renderLevelLayout } from '../../render/renderLevelLayout';
 
+// ─── Enemy badge colour map ───────────────────────────────────────
+// Maps enemy type IDs to a representative hex colour for the info badge.
+
+const ENEMY_BADGE_COLOR: Record<string, string> = {
+  laser:    '#ff4444',
+  quartz:   '#e0e0e0',
+  sapphire: '#4488ff',
+  emerald:  '#44cc66',
+  amber:    '#ff8800',
+  void:     '#9944cc',
+  ruby:     '#ff2255',
+  sunstone: '#ffcc44',
+  citrine:  '#ffee22',
+  iolite:   '#6688dd',
+  amethyst: '#bb44ee',
+  diamond:  '#88eeff',
+  nullstone:'#335566',
+  fracteryl:'#cc88ff',
+  eigenstein:'#ff9944',
+  alivened: '#44ffcc',
+};
+
 // ─── Public interface ─────────────────────────────────────────────
 
 export interface LevelScreen {
@@ -17,7 +39,10 @@ export interface LevelScreen {
   destroy(): void;
 }
 
-export function createLevelScreen(onClose: () => void): LevelScreen {
+export function createLevelScreen(
+  onClose: () => void,
+  onPlay?: (levelDef: LevelDefinition) => void,
+): LevelScreen {
   let currentLevelDef: LevelDefinition | null = null;
   let currentWorldColor = '#80c8ff';
   let rafId = 0;
@@ -73,13 +98,30 @@ export function createLevelScreen(onClose: () => void): LevelScreen {
   const archetypeEl = document.createElement('div');
   archetypeEl.className = 'ls-archetype';
 
+  // Enemy emphasis badge — shows the world's dominant enemy type(s) as coloured
+  // dots so the player can anticipate what they're about to face.
+  const enemyBadgeEl = document.createElement('div');
+  enemyBadgeEl.className = 'ls-enemy-badge';
+
+  const wavesEl = document.createElement('div');
+  wavesEl.className = 'ls-waves';
+
   const playBtn = document.createElement('button');
-  playBtn.className = 'ls-play-btn ls-play-btn--disabled';
-  playBtn.textContent = '▶ Play Level (Coming Soon)';
-  playBtn.disabled = true;
+  playBtn.className = onPlay ? 'ls-play-btn' : 'ls-play-btn ls-play-btn--disabled';
+  playBtn.textContent = onPlay ? '▶ Play Level' : '▶ Play Level (Coming Soon)';
+  playBtn.disabled = !onPlay;
+  if (onPlay) {
+    playBtn.addEventListener('click', () => {
+      if (currentLevelDef) {
+        onPlay(currentLevelDef);
+      }
+    });
+  }
 
   infoBar.appendChild(objectiveEl);
   infoBar.appendChild(archetypeEl);
+  infoBar.appendChild(enemyBadgeEl);
+  infoBar.appendChild(wavesEl);
   infoBar.appendChild(playBtn);
   element.appendChild(infoBar);
 
@@ -131,6 +173,36 @@ export function createLevelScreen(onClose: () => void): LevelScreen {
     worldTag.textContent = levelDef.worldId.replace(/_/g, ' ');
     objectiveEl.textContent = `Objective: ${levelDef.objective}`;
     archetypeEl.textContent = `Archetype: ${levelDef.archetype.replace(/_/g, ' ')}`;
+
+    // Waves indicator
+    const waves = levelDef.waveCount ?? (levelDef.type === 'boss' ? 5 : 3);
+    const waveLabel = levelDef.type === 'boss' ? `👑 ${waves} Boss Waves` : `⚔ ${waves} Waves`;
+    wavesEl.textContent = waveLabel;
+
+    // Enemy emphasis: show dots for the top 3 highest-biased enemy types.
+    enemyBadgeEl.innerHTML = '';
+    const bias = levelDef.waveEnemyBias;
+    if (bias && Object.keys(bias).length > 0) {
+      // Sort by descending multiplier; only show entries with multiplier > 0.8.
+      const entries = Object.entries(bias)
+        .filter((e): e is [string, number] => typeof e[1] === 'number' && e[1] > 0.8)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 4);
+      if (entries.length > 0) {
+        const label = document.createElement('span');
+        label.className = 'ls-enemy-badge__label';
+        label.textContent = 'Enemies: ';
+        enemyBadgeEl.appendChild(label);
+        for (const [eId] of entries) {
+          const dot = document.createElement('span');
+          dot.className = 'ls-enemy-badge__dot';
+          dot.textContent = eId.charAt(0).toUpperCase() + eId.slice(1, 3) + '.';
+          dot.style.color = ENEMY_BADGE_COLOR[eId] ?? '#ccc';
+          dot.title = eId;
+          enemyBadgeEl.appendChild(dot);
+        }
+      }
+    }
 
     element.classList.add('ls-screen--visible');
     resizeCanvas();

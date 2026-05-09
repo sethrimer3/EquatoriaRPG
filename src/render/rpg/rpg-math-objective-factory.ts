@@ -46,6 +46,38 @@ import { ALIVEN_PARTICLE_COUNT } from './rpg-enemy-constants';
  * Randomly assigns a math objective to a body-enemy based on wave tier and
  * optionally an enemy-kind-specific bias.
  */
+/**
+ * Current player ATK, used to clamp exact/threshold targets so they remain
+ * achievable regardless of wave number.  Updated via setCurrentPlayerAtk()
+ * whenever the player's stats change (see rpg-render.ts applyEquipmentStats).
+ */
+let _currentPlayerAtk = 10;
+
+/** Update the module-level player ATK used for solvability clamping. */
+export function setCurrentPlayerAtk(atk: number): void {
+  _currentPlayerAtk = Math.max(1, atk);
+}
+
+/**
+ * Clamp `value` so that exact/threshold objectives are reachable with a
+ * realistic number of hits.  Uses the current player ATK as the baseline.
+ *
+ * @param value   Proposed target value.
+ * @param maxMult Maximum multiplier of _currentPlayerAtk (default 4 = 4-hit combo).
+ *                A charged shot (3× ATK) can reliably solve targets up to 3×,
+ *                so the minimum of 0.25× ATK means even a weak hit is never
+ *                too small to trigger a digit-ending or modulo objective.
+ */
+function clampToReachable(value: number, maxMult = 4): number {
+  // Max multiplier of 4 is chosen to be slightly above the charge-attack ceiling
+  // (3× ATK).  With a full charge plus a normal hit, the player can deal up to
+  // 3× ATK — so a 4× target is always reachable within two shots.
+  // Min = 25 % of ATK ensures objectives are achievable with careful aiming.
+  const max = Math.ceil(_currentPlayerAtk * maxMult);
+  const min = Math.max(1, Math.floor(_currentPlayerAtk * 0.25));
+  return Math.min(max, Math.max(min, value));
+}
+
 export function maybeAttachMathObjective(
   enemy: { mathObjective?: MathObjective },
   waveNumber: number,
@@ -178,28 +210,33 @@ export function maybeAttachMathObjective(
   // ── Wave-tier generic bucket ───────────────────────────────────
   if (waveNumber <= 5) {
     if (rand < 0.5) {
-      enemy.mathObjective = makeThresholdObjective(8 + Math.floor(Math.random() * 8), accentColor);
+      const rawTarget = 8 + Math.floor(Math.random() * 8);
+      enemy.mathObjective = makeThresholdObjective(clampToReachable(rawTarget, 3), accentColor);
     } else {
       enemy.mathObjective = makeHitCountObjective(2 + Math.floor(Math.random() * 2), accentColor);
     }
   } else if (waveNumber <= 15) {
     if (rand < 0.30) {
-      enemy.mathObjective = makeThresholdObjective(10 + Math.floor(Math.random() * 20), accentColor);
+      const rawTarget = 10 + Math.floor(Math.random() * 20);
+      enemy.mathObjective = makeThresholdObjective(clampToReachable(rawTarget, 4), accentColor);
     } else if (rand < 0.50) {
       enemy.mathObjective = makeHitCountObjective(2 + Math.floor(Math.random() * 3), accentColor);
     } else if (rand < 0.75) {
-      enemy.mathObjective = makeExactObjective(10 + Math.floor(Math.random() * 20), accentColor);
+      const rawTarget = 10 + Math.floor(Math.random() * 20);
+      enemy.mathObjective = makeExactObjective(clampToReachable(rawTarget, 2), accentColor);
     } else {
       enemy.mathObjective = makeDigitEndingObjective(Math.floor(Math.random() * 10), accentColor);
     }
   } else if (waveNumber <= 30) {
     const FACTORS_MID = [12, 18, 24, 30, 36, 42];
     if (rand < 0.20) {
-      enemy.mathObjective = makeThresholdObjective(20 + Math.floor(Math.random() * 40), accentColor);
+      const rawTarget = 20 + Math.floor(Math.random() * 40);
+      enemy.mathObjective = makeThresholdObjective(clampToReachable(rawTarget, 5), accentColor);
     } else if (rand < 0.35) {
       enemy.mathObjective = makeHitCountObjective(3 + Math.floor(Math.random() * 3), accentColor);
     } else if (rand < 0.50) {
-      enemy.mathObjective = makeExactObjective(15 + Math.floor(Math.random() * 30), accentColor);
+      const rawTarget = 15 + Math.floor(Math.random() * 30);
+      enemy.mathObjective = makeExactObjective(clampToReachable(rawTarget, 2), accentColor);
     } else if (rand < 0.65) {
       enemy.mathObjective = makeDigitEndingObjective(Math.floor(Math.random() * 10), accentColor);
     } else if (rand < 0.80) {
@@ -211,16 +248,18 @@ export function maybeAttachMathObjective(
         FACTORS_MID[Math.floor(Math.random() * FACTORS_MID.length)], accentColor,
       );
     } else {
-      enemy.mathObjective = makeSumTargetObjective(50 + Math.floor(Math.random() * 100), accentColor);
+      enemy.mathObjective = makeSumTargetObjective(clampToReachable(50 + Math.floor(Math.random() * 100), 10), accentColor);
     }
   } else {
     // Late-game generic bucket — now includes integral and geometry
     const FACTORS_LATE = [12, 18, 24, 30, 36, 42, 48, 60];
     const GEO_DIMS = [4, 5, 6, 7, 8, 9, 10, 12];
     if (rand < 0.12) {
-      enemy.mathObjective = makeThresholdObjective(30 + Math.floor(Math.random() * 60), accentColor);
+      const rawTarget = 30 + Math.floor(Math.random() * 60);
+      enemy.mathObjective = makeThresholdObjective(clampToReachable(rawTarget, 6), accentColor);
     } else if (rand < 0.22) {
-      enemy.mathObjective = makeExactObjective(20 + Math.floor(Math.random() * 50), accentColor);
+      const rawTarget = 20 + Math.floor(Math.random() * 50);
+      enemy.mathObjective = makeExactObjective(clampToReachable(rawTarget, 3), accentColor);
     } else if (rand < 0.31) {
       enemy.mathObjective = makeDigitEndingObjective(Math.floor(Math.random() * 10), accentColor);
     } else if (rand < 0.40) {
@@ -232,7 +271,7 @@ export function maybeAttachMathObjective(
         FACTORS_LATE[Math.floor(Math.random() * FACTORS_LATE.length)], accentColor,
       );
     } else if (rand < 0.60) {
-      enemy.mathObjective = makeSumTargetObjective(80 + Math.floor(Math.random() * 200), accentColor);
+      enemy.mathObjective = makeSumTargetObjective(clampToReachable(80 + Math.floor(Math.random() * 200), 15), accentColor);
     } else if (rand < 0.68) {
       enemy.mathObjective = makeHitCountObjective(4 + Math.floor(Math.random() * 3), accentColor);
     } else if (rand < 0.76) {

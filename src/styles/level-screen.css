@@ -160,3 +160,35 @@
   .ls-header { padding: 5px 12px; min-height: 38px; }
   .ls-info-bar { padding: 5px 12px; min-height: 36px; }
 }
+
+/* ── Enemy badge (wave composition preview) ──────────────────── */
+.ls-enemy-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-muted, #888);
+  flex: 1 1 auto;
+}
+
+.ls-enemy-badge__label {
+  color: var(--text-muted, #888);
+  white-space: nowrap;
+}
+
+.ls-enemy-badge__dot {
+  font-size: 9px;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.07);
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+/* ── Wave count indicator ─────────────────────────────────────── */
+.ls-waves {
+  font-size: 10px;
+  color: var(--text-muted, #888);
+  white-space: nowrap;
+  flex: 0 0 auto;
+}

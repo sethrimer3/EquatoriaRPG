@@ -278,6 +278,11 @@
   color: #e74c3c;
 }
 
+.settings-btn--info {
+  border-color: #4a9eff;
+  color: #4a9eff;
+}
+
 .settings-btn:active {
   background: rgba(255, 241, 114, 0.08);
 }

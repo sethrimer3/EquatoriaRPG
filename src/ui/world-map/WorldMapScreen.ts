@@ -35,6 +35,12 @@ export interface WorldMapScreen {
   refresh(state: WorldMapProgressionState): void;
   /** Update particle quality (e.g. from settings change). */
   setParticleQuality(quality: ParticleQuality): void;
+  /**
+   * Queue a brief unlock-pulse animation on a world node.
+   * Plays automatically the next time the map is shown (or immediately
+   * if the map is already visible).  Safe to call before `show()`.
+   */
+  scheduleNewWorldHighlight(worldId: WorldId): void;
   destroy(): void;
 }
 
@@ -53,8 +59,11 @@ interface WorldNode {
 const NODE_RADIUS = 18;
 const BOSS_NODE_RADIUS = 22;
 const NODE_PADDING = 0.08;        // fraction of canvas dimension kept as margin
-/** Extra hit-test radius beyond visual radius so nodes are easy to tap. */
-const NODE_HIT_EXPAND = 8;
+/**
+ * Extra hit-test radius beyond visual radius so nodes are easy to tap.
+ * 22 CSS px gives a comfortable finger-sized target on mobile.
+ */
+const NODE_HIT_EXPAND = 22;
 /**
  * Perpendicular offset factor for path quadratic curves.
  * A small value (0.12) produces a gentle arc without dramatic bending.
@@ -82,6 +91,8 @@ export function createWorldMapScreen(
   onClose: () => void,
   initialState: WorldMapProgressionState,
   onMainMenu?: () => void,
+  /** Optional: called when FPS auto-quality changes the particle quality level. */
+  onAutoQualityChange?: (quality: ParticleQuality) => void,
 ): WorldMapScreen {
   let state = initialState;
   let selectedWorldId: WorldId | null = null;
@@ -92,6 +103,26 @@ export function createWorldMapScreen(
   let particleQuality: ParticleQuality = 'full';
   let particleSys = createWorldMapParticles(particleQuality);
   let isVisible = false;
+
+  /**
+   * Worlds pending an unlock-flash animation.
+   * Each entry holds the worldId and the remaining display duration in ms.
+   * Entries are removed when duration reaches 0.
+   */
+  const unlockFlashes = new Map<WorldId, number>();
+  /** Total duration for the unlock-flash pulse animation (ms). */
+  const UNLOCK_FLASH_DURATION_MS = 4000;
+
+  // ── FPS auto-detection ──
+  // Track a rolling window of recent frame times to compute average FPS.
+  // When FPS stays below FPS_REDUCE_THRESHOLD for FPS_REDUCE_WINDOW_MS,
+  // particle quality is automatically lowered.
+  const FPS_REDUCE_THRESHOLD = 30;      // fps — reduce if below this
+  const FPS_REDUCE_WINDOW_MS = 3000;    // ms — how long FPS must be low before reducing
+  const FPS_RESTORE_THRESHOLD = 50;     // fps — restore to 'full' if consistently above this
+  const FPS_RESTORE_WINDOW_MS = 5000;   // ms — how long FPS must be high before restoring
+  let _fpsLowMs  = 0;   // accumulated ms below FPS_REDUCE_THRESHOLD this window
+  let _fpsHighMs = 0;   // accumulated ms above FPS_RESTORE_THRESHOLD this window
 
   // ── Root element ──
   const element = document.createElement('div');
@@ -147,11 +178,25 @@ export function createWorldMapScreen(
   canvasArea.className = 'wm-canvas-area';
   body.appendChild(canvasArea);
 
+  // ── Mobile hint label ──
+  // Shown below the canvas on narrow viewports to help first-time mobile users.
+  const mobileHint = document.createElement('div');
+  mobileHint.className = 'wm-mobile-hint';
+  mobileHint.textContent = 'Tap a world node to select a level';
+  canvasArea.appendChild(mobileHint);
+
   const canvas = document.createElement('canvas');
   canvasArea.appendChild(canvas);
   const ctxRaw = canvas.getContext('2d');
   if (!ctxRaw) throw new Error('WorldMapScreen: failed to get 2D canvas context');
   const ctx = ctxRaw;
+
+  // ── Node hover tooltip (desktop) ──
+  // Positioned absolutely inside `body` so it can overflow the canvas area.
+  const nodeTooltip = document.createElement('div');
+  nodeTooltip.className = 'wm-node-tooltip';
+  nodeTooltip.style.display = 'none';
+  body.appendChild(nodeTooltip);
 
   // ── Detail panel ──
   const detailPanel = document.createElement('div');
@@ -165,10 +210,19 @@ export function createWorldMapScreen(
     devBtn.setAttribute('aria-pressed', String(state.devMode));
   }
 
-  /** Map a normalized (0–1) world position to canvas pixel coordinates. */
+  /**
+   * Map a normalized (0–1) world position to CSS-pixel canvas coordinates.
+   *
+   * IMPORTANT: always use CSS pixel dimensions (clientWidth/clientHeight), NOT
+   * canvas.width/canvas.height.  canvas.width is the backing-store size
+   * (CSS px × DPR).  ctx.setTransform(dpr,0,0,dpr,0,0) means every drawing
+   * call expects CSS-pixel coordinates, so nodes must also live in that space.
+   * Mixing backing-store dimensions with the DPR transform pushes nodes off-
+   * screen by a factor of DPR on high-DPI (e.g. 2× or 3×) devices.
+   */
   function normToCanvas(nx: number, ny: number): { cx: number; cy: number } {
-    const w = canvas.width;
-    const h = canvas.height;
+    const w = canvasArea.clientWidth;
+    const h = canvasArea.clientHeight;
     const padX = w * NODE_PADDING;
     const padY = h * NODE_PADDING;
     return {
@@ -208,8 +262,12 @@ export function createWorldMapScreen(
 
   /** Draw the full map (called every animation frame). */
   function drawMap(): void {
-    const w = canvas.width;
-    const h = canvas.height;
+    // Use CSS pixel dimensions — the ctx DPR transform means all drawing
+    // coordinates are in CSS pixels.  Clearing with canvas.width/canvas.height
+    // (backing-store pixels) in the transformed context would over-clear by
+    // DPR², wasting fill operations (though Canvas clips it harmlessly).
+    const w = canvasArea.clientWidth;
+    const h = canvasArea.clientHeight;
     ctx.clearRect(0, 0, w, h);
 
     if (nodes.length === 0) return;
@@ -296,16 +354,35 @@ export function createWorldMapScreen(
       radGrad.addColorStop(1, darken(color, 0.2));
       ctx.fillStyle = radGrad;
       ctx.fill();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.5;
+      // Completed worlds get a gold stroke; others use the world colour.
+      if (s === 'completed') {
+        ctx.strokeStyle = '#ffe066';
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = '#ffe066';
+        ctx.shadowBlur = 6;
+      } else {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 0;
+      }
       ctx.stroke();
+      ctx.shadowBlur = 0;
 
-      // Chapter number in node
-      ctx.fillStyle = s === 'locked' ? '#5a5a6a' : '#0a0a12';
+      // Chapter number in node (for non-completed worlds) or checkmark (for completed)
       ctx.font = `bold ${Math.round(node.radius * 0.75)}px 'Poiret One', sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(String(worldData.chapter), node.cx, node.cy);
+      if (s === 'completed') {
+        // Draw a subtle checkmark with glow to signal world fully beaten.
+        ctx.fillStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 6;
+        ctx.fillText('✓', node.cx, node.cy);
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.fillStyle = s === 'locked' ? '#5a5a6a' : '#0a0a12';
+        ctx.fillText(String(worldData.chapter), node.cx, node.cy);
+      }
 
       // World name below node
       ctx.fillStyle = s === 'locked' ? '#4a4a5a' : color;
@@ -324,6 +401,73 @@ export function createWorldMapScreen(
         ctx.textBaseline = 'bottom';
         ctx.fillText('⬡', node.cx, node.cy - node.radius - 3);
       }
+
+      // ── Level progress dots ────────────────────────────────────
+      // Show mini dots below the world name indicating mandatory-level progress.
+      // Only visible when the world is unlocked/current/completed.
+      if (s !== 'locked') {
+        const worldProgress = state.worlds.get(node.worldId);
+        const totalLevels   = worldData.mandatoryLevels.length;
+        const doneLevels    = worldProgress ? worldProgress.completedMandatoryLevelIds.size : 0;
+        if (totalLevels > 0) {
+          const dotRadius = 1.5;
+          const dotGap    = 3.5;
+          const dotRow    = node.cy + node.radius + 14; // below world name
+          const totalW    = (totalLevels - 1) * dotGap;
+          const startX    = node.cx - totalW / 2;
+          for (let d = 0; d < totalLevels; d++) {
+            const dx = startX + d * dotGap;
+            const isBossLevel = worldData.mandatoryLevels[d]?.type === 'boss';
+            ctx.beginPath();
+            ctx.arc(dx, dotRow, isBossLevel ? dotRadius * 1.4 : dotRadius, 0, Math.PI * 2);
+            if (d < doneLevels) {
+              // Completed dot — bright colour matching the world
+              ctx.fillStyle = color;
+            } else if (d === doneLevels && s !== 'completed') {
+              // Current dot — accent blue
+              ctx.fillStyle = COLOR_CURRENT;
+            } else {
+              // Future dot — dim
+              ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            }
+            ctx.fill();
+          }
+        }
+      }
+    }
+
+    // ── Unlock-flash rings (drawn after all nodes so they are on top) ──
+    for (const [wId, remaining] of unlockFlashes) {
+      const node = nodes.find(n => n.worldId === wId);
+      if (!node) continue;
+      // Normalised progress [0,1]: 0 = just started, 1 = almost done
+      const t = 1 - remaining / UNLOCK_FLASH_DURATION_MS;
+      // Oscillate with decreasing amplitude (fades out)
+      const oscillations = 4;
+      const pulse = Math.sin(t * oscillations * Math.PI * 2) * (1 - t);
+      // Outer ring expands then contracts
+      const expandR = node.radius + 14 + pulse * 10;
+      const alpha = (1 - t) * 0.85;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, alpha);
+      ctx.beginPath();
+      ctx.arc(node.cx, node.cy, expandR, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ffe066';
+      ctx.lineWidth = 3;
+      ctx.shadowColor = '#ffe066';
+      ctx.shadowBlur = 16;
+      ctx.stroke();
+      // "NEW!" label on first half of animation
+      if (t < 0.5) {
+        ctx.font = `bold ${Math.round(node.radius * 0.55)}px 'Poiret One', sans-serif`;
+        ctx.fillStyle = '#ffe066';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.shadowBlur = 8;
+        ctx.fillText('NEW!', node.cx, node.cy + node.radius + Math.round(node.radius * 0.7));
+      }
+      ctx.shadowBlur = 0;
+      ctx.restore();
     }
   }
 
@@ -353,12 +497,19 @@ export function createWorldMapScreen(
     return null;
   }
 
-  /** Convert a client-space point to canvas pixel coordinates. */
+  /**
+   * Convert a client-space pointer position to CSS-pixel canvas coordinates.
+   *
+   * getBoundingClientRect() already returns CSS-pixel values, so subtracting
+   * rect.left/top gives the correct CSS-pixel offset — no DPR scaling needed.
+   * Node positions in `nodes[]` are also in CSS pixels (see normToCanvas), so
+   * hit-testing compares apples to apples.
+   */
   function clientToCanvas(clientX: number, clientY: number): { px: number; py: number } {
     const rect = canvas.getBoundingClientRect();
     return {
-      px: (clientX - rect.left) * (canvas.width / rect.width),
-      py: (clientY - rect.top) * (canvas.height / rect.height),
+      px: clientX - rect.left,
+      py: clientY - rect.top,
     };
   }
 
@@ -396,10 +547,51 @@ export function createWorldMapScreen(
     onCanvasClick(e);
   }, { passive: false });
 
-  // Pointer cursor when hovering a node
+  // Pointer cursor + tooltip when hovering a node
   canvas.addEventListener('mousemove', (e: MouseEvent) => {
     const { px, py } = clientToCanvas(e.clientX, e.clientY);
-    canvas.style.cursor = getNodeAtPoint(px, py) ? 'pointer' : 'default';
+    const node = getNodeAtPoint(px, py);
+    canvas.style.cursor = node ? 'pointer' : 'default';
+
+    if (node) {
+      const worldData = WORLD_MAP_DATA.find(w => w.id === node.worldId);
+      const s = getWorldUnlockState(state, node.worldId);
+      const stateLabel: Record<typeof s, string> = {
+        completed: '✅ Completed',
+        current:   '▶ In Progress',
+        unlocked:  '🔓 Unlocked',
+        locked:    '🔒 Locked',
+      };
+      const lines = [
+        worldData ? `<strong>${worldData.name}</strong>` : node.worldId,
+        worldData ? `Chapter ${worldData.chapter}` : '',
+        stateLabel[s],
+      ].filter(Boolean);
+      nodeTooltip.innerHTML = lines.join('<br>');
+      // Position the tooltip in the canvas area's coordinate space.
+      const canvasRect = canvas.getBoundingClientRect();
+      const bodyRect   = body.getBoundingClientRect();
+      let tooltipX = e.clientX - bodyRect.left + 14;
+      const tooltipY = e.clientY - bodyRect.top  - 8;
+      // Clamp so the tooltip doesn't overflow beyond the canvas right edge.
+      // We estimate the tooltip width conservatively (80 px) as we can't
+      // measure it before rendering without forcing layout.
+      const TOOLTIP_EST_WIDTH = 120;
+      const canvasRight = canvasRect.right - bodyRect.left;
+      if (tooltipX + TOOLTIP_EST_WIDTH > canvasRight) {
+        tooltipX = Math.max(0, e.clientX - bodyRect.left - TOOLTIP_EST_WIDTH - 6);
+      }
+      nodeTooltip.style.left = `${tooltipX}px`;
+      nodeTooltip.style.top  = `${tooltipY}px`;
+      nodeTooltip.style.display = '';
+    } else {
+      nodeTooltip.style.display = 'none';
+    }
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    nodeTooltip.style.display = 'none';
+    canvas.style.cursor = 'default';
   });
 
   // ─── Resize ─────────────────────────────────────────────────────
@@ -446,6 +638,50 @@ export function createWorldMapScreen(
     const dtMs = Math.min(nowMs - lastFrameMs, MAX_FRAME_DELTA_MS);
     lastFrameMs = nowMs;
 
+    // Tick unlock-flash timers.
+    for (const [wId, remaining] of unlockFlashes) {
+      const next = remaining - dtMs;
+      if (next <= 0) {
+        unlockFlashes.delete(wId);
+      } else {
+        unlockFlashes.set(wId, next);
+      }
+    }
+
+    // ── FPS auto-quality ──────────────────────────────────────────
+    if (dtMs > 0) {
+      const fps = 1000 / dtMs;
+      if (fps < FPS_REDUCE_THRESHOLD) {
+        _fpsLowMs += dtMs;
+        _fpsHighMs = 0;
+        if (_fpsLowMs >= FPS_REDUCE_WINDOW_MS && particleQuality === 'full') {
+          // Auto-reduce to 'reduced'; pass fromAutoDetect=true to trigger persistence.
+          applyParticleQuality('reduced', true);
+          _fpsLowMs = 0;
+          console.info('[WorldMap] Auto-reduced particle quality to "reduced" (FPS < 30)');
+        } else if (_fpsLowMs >= FPS_REDUCE_WINDOW_MS && particleQuality === 'reduced') {
+          // Reduce further to 'low'; pass fromAutoDetect=true to trigger persistence.
+          applyParticleQuality('low', true);
+          _fpsLowMs = 0;
+          console.info('[WorldMap] Auto-reduced particle quality to "low" (FPS < 30)');
+        }
+      } else {
+        _fpsLowMs = 0;
+        if (fps > FPS_RESTORE_THRESHOLD && particleQuality !== 'full') {
+          _fpsHighMs += dtMs;
+          if (_fpsHighMs >= FPS_RESTORE_WINDOW_MS) {
+            const next = particleQuality === 'low' ? 'reduced' as const : 'full' as const;
+            // Restore quality; pass fromAutoDetect=true to trigger persistence.
+            applyParticleQuality(next, true);
+            _fpsHighMs = 0;
+            console.info(`[WorldMap] Auto-restored particle quality to "${next}" (FPS > 50)`);
+          }
+        } else {
+          _fpsHighMs = 0;
+        }
+      }
+    }
+
     // Particle positions are in CSS pixel space (matching the ctx DPR transform).
     const cxCSS = canvasArea.clientWidth / 2;
     const cyCSS = canvasArea.clientHeight / 2;
@@ -455,6 +691,28 @@ export function createWorldMapScreen(
     drawMap();
 
     animRafId = requestAnimationFrame(animFrame);
+  }
+
+  /**
+   * Internal helper: apply a quality level and optionally notify the host.
+   * @param quality The new particle quality level.
+   * @param fromAutoDetect When true, fires `onAutoQualityChange` so the host can
+   *   persist the new level.  When false (user-initiated via setParticleQuality),
+   *   the host already knows about the change, so the callback is suppressed.
+   */
+  function applyParticleQuality(quality: ParticleQuality, fromAutoDetect = false): void {
+    particleQuality = quality;
+    particleSys = createWorldMapParticles(quality);
+    if (isVisible) {
+      const cxCSS = canvasArea.clientWidth / 2;
+      const cyCSS = canvasArea.clientHeight / 2;
+      const maxR = Math.min(cxCSS, cyCSS) * 0.92;
+      particleSys.resize(cxCSS, cyCSS, maxR);
+      particleSys.setActive(true);
+    }
+    // Notify the host only when the change came from FPS auto-detection, so
+    // user-initiated calls to setParticleQuality() don't create a redundant save.
+    if (fromAutoDetect) onAutoQualityChange?.(quality);
   }
 
   function startAnimLoop(): void {
@@ -516,15 +774,16 @@ export function createWorldMapScreen(
     refresh,
     setParticleQuality(quality: ParticleQuality): void {
       if (quality === particleQuality) return;
-      particleQuality = quality;
-      particleSys = createWorldMapParticles(quality);
-      if (isVisible) {
-        const cxCSS = canvasArea.clientWidth / 2;
-        const cyCSS = canvasArea.clientHeight / 2;
-        const maxR = Math.min(cxCSS, cyCSS) * 0.92;
-        particleSys.resize(cxCSS, cyCSS, maxR);
-        particleSys.setActive(true);
-      }
+      applyParticleQuality(quality);
+      // Reset FPS accumulators so a manual quality change isn't immediately
+      // re-overridden by the auto-detection logic.
+      _fpsLowMs  = 0;
+      _fpsHighMs = 0;
+    },
+    scheduleNewWorldHighlight(worldId: WorldId): void {
+      // Queue the unlock-flash animation; it plays the next time drawMap() is
+      // called from the anim loop (which starts when the map is shown).
+      unlockFlashes.set(worldId, UNLOCK_FLASH_DURATION_MS);
     },
     destroy,
   };

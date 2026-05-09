@@ -5,6 +5,11 @@ import {
   serializeInteractionMatrix,
   deserializeInteractionMatrix,
 } from '../data/particles/interaction-matrix';
+import type { WorldMapProgressionState } from '../types/worldMapTypes';
+import {
+  serializeWorldMapState,
+  deserializeWorldMapState,
+} from '../systems/worldMapProgression';
 
 // ─── Save format ────────────────────────────────────────────────
 
@@ -225,5 +230,36 @@ export function deleteSave(): void {
     localStorage.removeItem(SAVE_KEY);
   } catch {
     // ignore
+  }
+}
+
+// ─── World map progression persistence ──────────────────────────
+// Stored under a separate key so it never corrupts the main game save.
+
+const WORLD_MAP_KEY = 'equatoria_worldmap';
+
+/** Persist world-map progression to localStorage. Returns true on success. */
+export function saveWorldMapProgression(state: WorldMapProgressionState): boolean {
+  try {
+    const data = serializeWorldMapState(state);
+    localStorage.setItem(WORLD_MAP_KEY, JSON.stringify(data));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Load world-map progression from localStorage.
+ * Falls back to null (caller should create default state) if absent or corrupt.
+ */
+export function loadWorldMapProgression(): WorldMapProgressionState | null {
+  try {
+    const raw = localStorage.getItem(WORLD_MAP_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as Record<string, unknown>;
+    return deserializeWorldMapState(data);
+  } catch {
+    return null;
   }
 }
