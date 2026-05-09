@@ -91,6 +91,8 @@ export function createWorldMapScreen(
   onClose: () => void,
   initialState: WorldMapProgressionState,
   onMainMenu?: () => void,
+  /** Optional: called when FPS auto-quality changes the particle quality level. */
+  onAutoQualityChange?: (quality: ParticleQuality) => void,
 ): WorldMapScreen {
   let state = initialState;
   let selectedWorldId: WorldId | null = null;
@@ -682,6 +684,8 @@ export function createWorldMapScreen(
       particleSys.resize(cxCSS, cyCSS, maxR);
       particleSys.setActive(true);
     }
+    // Notify the host so it can persist the new quality level.
+    onAutoQualityChange?.(quality);
   }
 
   function startAnimLoop(): void {

@@ -60,6 +60,12 @@ export interface AudioSystem {
   onForgeCrunchStarted(): void;
   onForgeSpinUpCancelled(): void;
 
+  // RPG charge attack events
+  /** Called when the charge meter reaches 100% (CHARGED!) — brief audio cue. */
+  onChargeReady(): void;
+  /** Called when a charged shot fires (key released with >= minimum charge). */
+  onChargeRelease(): void;
+
   // Settings events
   onSettingsChanged(): void;
 
@@ -85,6 +91,8 @@ function createNoOpAudioSystem(): AudioSystem {
     onForgeSpinUpBegan:     () => {},
     onForgeCrunchStarted:   () => {},
     onForgeSpinUpCancelled: () => {},
+    onChargeReady:          () => {},
+    onChargeRelease:        () => {},
     onSettingsChanged:      () => {},
     updateAmbianceForTab:   () => {},
   };
@@ -200,6 +208,17 @@ export function createAudioSystem(musicVolume = 0.5, sfxVolume = 0.7): AudioSyst
 
     onForgeSpinUpCancelled(): void {
       sfx.onForgeChargingCancelled();
+    },
+
+    onChargeReady(): void {
+      // Reuse the achievementEarned sound pitched briefly to signal "fully charged".
+      void sfx.play(ACHIEVEMENT_EARNED_PATH);
+    },
+
+    onChargeRelease(): void {
+      // Reuse the buyEquationUpgrade sound — a crisp impact click — for the
+      // charged shot release.
+      void sfx.play(BUY_EQUATION_UPGRADE_PATH);
     },
 
     onSettingsChanged(): void {

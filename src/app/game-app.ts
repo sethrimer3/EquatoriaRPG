@@ -221,7 +221,9 @@ export async function startApp(): Promise<void> {
       const bonus = Math.max(1, current * bonusPct / 100);
       addMotes(appState.game.resources, tierId, bonus);
     },
-    onError: () => { audioSystem.onError(); },
+    onError:         () => { audioSystem.onError(); },
+    onChargeReady:   () => { audioSystem.onChargeReady(); },
+    onChargeRelease: () => { audioSystem.onChargeRelease(); },
     onLevelComplete: () => {
       // Snapshot which worlds are unlocked BEFORE marking the level complete.
       const prevUnlocked = new Set<WorldId>(
@@ -345,6 +347,12 @@ export async function startApp(): Promise<void> {
     () => { worldMapScreen.hide(); },
     worldMapProgressionState,
     goToMainMenu,
+    // Persist auto-reduced particle quality so low-end devices remember the
+    // reduced setting across sessions without requiring a manual settings change.
+    (quality) => {
+      settings.worldMapParticleQuality = quality;
+      saveSettings(settings);
+    },
   );
   // Apply persisted particle quality.
   worldMapScreen.setParticleQuality(settings.worldMapParticleQuality ?? 'full');

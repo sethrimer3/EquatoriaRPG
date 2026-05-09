@@ -251,6 +251,16 @@ export interface RpgRenderOptions {
    */
   onError?: () => void;
   /**
+   * Called when the charge meter first reaches 100%.
+   * Callers should play a "ready" audio cue.
+   */
+  onChargeReady?: () => void;
+  /**
+   * Called when a charged shot fires.
+   * Callers should play the charge-release SFX.
+   */
+  onChargeRelease?: () => void;
+  /**
    * Called once when the player clears enough waves to satisfy the world-map
    * level-completion threshold (WAVES_TO_COMPLETE_LEVEL).  The caller should
    * mark the active level complete, save world-map progression, and refresh
@@ -1053,6 +1063,9 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
     }
   }
 
+  // Track whether the "charge ready" audio cue has fired for the current charge.
+  let _chargeReadyFired = false;
+
   /**
    * Tick the charge-attack mechanic each frame.
    *
@@ -1064,10 +1077,16 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
   function updateChargeAttack(deltaMs: number): void {
     if (rpgPhase === 'alive' && keys.charge) {
       chargeMs = Math.min(chargeMs + deltaMs, CHARGE_MAX_MS);
+      // Fire the "charge ready" audio cue once when the meter fills.
+      if (!_chargeReadyFired && chargeMs >= CHARGE_MAX_MS) {
+        _chargeReadyFired = true;
+        options.onChargeReady?.();
+      }
       return;
     }
     if (chargeMs >= CHARGE_MIN_MS) {
       // Key just released with enough charge — fire a boosted shot.
+      options.onChargeRelease?.();
       const chargeFrac = Math.min(1, chargeMs / CHARGE_MAX_MS);
       const chargeMult = 1 + (CHARGE_MAX_MULT - 1) * chargeFrac;
       const prevAtk = playerStats.atk;
@@ -1084,6 +1103,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
     }
     // Reset whether charge fired or was abandoned.
     chargeMs = 0;
+    _chargeReadyFired = false;
   }
 
   function doRestart(): void {
