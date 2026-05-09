@@ -405,6 +405,8 @@ export async function startApp(): Promise<void> {
       rpgRender.setLevelWaveTarget(levelDef.waveCount ?? (levelDef.type === 'boss' ? 5 : 3));
       // Apply per-world enemy bias so each level has a distinct flavour.
       rpgRender.setWaveEnemyBias(levelDef.waveEnemyBias ?? {});
+      // Show the level name as a brief intro banner at the start of the run.
+      rpgRender.setLevelName(levelDef.name);
       // Start the game loop
       gameLoop.start();
       // Push an 'arena' history entry so the system back gesture navigates

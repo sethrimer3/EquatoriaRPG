@@ -235,6 +235,12 @@ export interface RpgRender {
    *   { void: 2.0, nullstone: 1.5 } — void/dark world
    */
   setWaveEnemyBias(bias: Partial<Record<string, number>>): void;
+  /**
+   * Set the display name of the current level.  The name is shown on a brief
+   * intro banner (3 s) at the start of each level run.  Pass an empty string
+   * to suppress the banner.
+   */
+  setLevelName(name: string): void;
 }
 
 /** Options passed to createRpgRender. */
@@ -369,6 +375,15 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
   const LEVEL_COMPLETE_TITLE_SCALE    = 0.055;
   /** Subtitle font as a fraction of canvas width (0.030 → ~3.0% of canvas width). */
   const LEVEL_COMPLETE_SUBTITLE_SCALE = 0.030;
+
+  // ── Level intro banner ────────────────────────────────────────────
+  /** Current level display name (empty string = no banner). */
+  let _levelName = '';
+  /** How long (ms) the level intro banner has been showing. */
+  let _levelIntroBannerMs = 0;
+  const LEVEL_INTRO_BANNER_DURATION_MS = 3000;
+  const LEVEL_INTRO_TITLE_SCALE = 0.042;
+  const LEVEL_INTRO_SUBTITLE_SCALE = 0.024;
   let phaseTimerMs     = 0;
   let deathAlpha       = 1;
   let screenDarken     = 0;
@@ -1372,6 +1387,35 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
       ctx.restore();
     }
 
+    // ── Level name intro banner (shown for 3 s at level start) ────
+    if (_levelName && _levelIntroBannerMs < LEVEL_INTRO_BANNER_DURATION_MS) {
+      const t = _levelIntroBannerMs / LEVEL_INTRO_BANNER_DURATION_MS;
+      // Fade in for first 12 %, hold, fade out for last 25 %.
+      const alpha = t < 0.12
+        ? t / 0.12
+        : t > 0.75
+          ? (1 - t) / 0.25
+          : 1;
+      const titleSz = Math.round(widthPx * LEVEL_INTRO_TITLE_SCALE);
+      const subSz   = Math.round(widthPx * LEVEL_INTRO_SUBTITLE_SCALE);
+      const y = heightPx * 0.20;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+      ctx.textAlign   = 'center';
+      ctx.font        = `bold ${titleSz}px monospace`;
+      ctx.shadowColor = '#80c8ff';
+      ctx.shadowBlur  = 12;
+      ctx.fillStyle   = '#c8eeff';
+      ctx.fillText(_levelName, widthPx / 2, y);
+      ctx.font        = `${subSz}px monospace`;
+      ctx.fillStyle   = '#8899aa';
+      ctx.shadowBlur  = 4;
+      ctx.fillText('Good luck!', widthPx / 2, y + titleSz + 4);
+      ctx.shadowBlur  = 0;
+      ctx.textAlign   = 'left';
+      ctx.restore();
+    }
+
     // ── Top-left wave number overlay ──────────────────────────────
     if (currentWave > 0) {
       // Check if any enemy or player is near the top-left corner region
@@ -1488,6 +1532,11 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
           _levelCompleteBannerMs + deltaMs,
           LEVEL_COMPLETE_BANNER_DURATION_MS,
         );
+      }
+
+      // Advance the level intro banner timer.
+      if (_levelName && _levelIntroBannerMs < LEVEL_INTRO_BANNER_DURATION_MS) {
+        _levelIntroBannerMs = Math.min(_levelIntroBannerMs + deltaMs, LEVEL_INTRO_BANNER_DURATION_MS);
       }
 
       updatePlayerMovement(movementCtx, playerMovementState, deltaMs);
@@ -1643,6 +1692,8 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
         _levelStartWave = currentWave;
         _levelCompleted = false;
         _levelCompleteBannerMs = 0;
+        // Reset level intro banner timer (the name was already set by setLevelName).
+        _levelIntroBannerMs = 0;
         // Reset tutorial banners so the player sees first-encounter hints
         // for any objectives they haven't seen this level run.
         resetObjectiveTutorials();
@@ -1706,6 +1757,11 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
 
     setWaveEnemyBias(bias: Partial<Record<string, number>>): void {
       _waveEnemyBias = bias;
+    },
+
+    setLevelName(name: string): void {
+      _levelName = name;
+      _levelIntroBannerMs = 0;
     },
   };
 }
