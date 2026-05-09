@@ -118,6 +118,12 @@ export interface WaveManagerCtx {
   setIsBossFightFromMenu(b: boolean): void;
   getCurrentWave(): number;
   setCurrentWave(wave: number): void;
+  /**
+   * Returns the effective wave number for enemy HP/ATK/DEF scaling.
+   * Equal to `currentWave + waveBaseLevel` so later campaign worlds spawn
+   * harder enemies even on early waves.
+   */
+  getEffectiveWave(): number;
   getIsInterWave(): boolean;
   setIsInterWave(b: boolean): void;
   setInterWaveTimerMs(ms: number): void;

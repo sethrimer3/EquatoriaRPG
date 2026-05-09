@@ -106,7 +106,27 @@ const WORLD_BIAS: Record<WorldId, Partial<Record<string, number>>> = {
   eigen_citadel:       BIAS_EIGEN,
 };
 
-// ─── Helper ───────────────────────────────────────────────────────
+/** Map from WorldId to the default wave base level for that world.
+ *
+ * This offset is added to the running campaign wave counter when computing
+ * enemy HP/ATK/DEF, so enemies in later worlds spawn at a higher stat scale
+ * even though campaign levels only run 3–5 waves.
+ *
+ * Scaling: World 1 (Origin Nexus) = wave 1–3; World 11 (Eigen Citadel) = wave 101–105.
+ */
+const WORLD_WAVE_BASE_LEVEL: Record<WorldId, number> = {
+  origin_nexus:        0,   // Waves 1-3   (introductory)
+  arithmetic_sands:    5,   // Waves 6-10
+  fraction_fen:        12,  // Waves 13-17
+  algebra_grove:       20,  // Waves 21-25
+  geometry_peaks:      30,  // Waves 31-35
+  coordinate_city:     42,  // Waves 43-47
+  calculus_falls:      56,  // Waves 57-61
+  probability_gardens: 72,  // Waves 73-77
+  matrix_bastion:      90,  // Waves 91-95
+  fractal_expanse:     110, // Waves 111-115
+  eigen_citadel:       132, // Waves 133-137
+};
 
 function def(
   levelId: string,
@@ -127,7 +147,8 @@ function def(
   // fights should feel thematically consistent with their world's enemy roster.
   // Pass an empty object `{}` explicitly to opt out of any bias on a per-level basis.
   const bias = waveEnemyBias ?? WORLD_BIAS[worldId];
-  return { id: `layout_${levelId}`, worldId, levelId, name, type, archetype, description, objective, room, placeholderMechanics, waveCount, waveEnemyBias: bias };
+  const waveBaseLevel = WORLD_WAVE_BASE_LEVEL[worldId];
+  return { id: `layout_${levelId}`, worldId, levelId, name, type, archetype, description, objective, room, placeholderMechanics, waveCount, waveEnemyBias: bias, waveBaseLevel };
 }
 
 const plans: LevelDefinition[] = [];

@@ -133,4 +133,15 @@ export interface LevelDefinition {
    * Example: `{ quartz: 1.8, laser: 0.5 }` for a crystal-heavy level.
    */
   readonly waveEnemyBias?: Readonly<Partial<Record<string, number>>>;
+  /**
+   * Wave number offset added to the running wave counter when computing enemy
+   * HP/ATK/DEF via `getWaveStatScale()`.  Later worlds use a higher base so
+   * enemies feel progressively harder even though campaign levels only run
+   * 3–5 waves.
+   *
+   * World 1 = 0 (waves effectively 1-3/5)
+   * World 6 = 30 (waves effectively 31-35)
+   * World 11 = 100 (waves effectively 101-105)
+   */
+  readonly waveBaseLevel?: number;
 }
