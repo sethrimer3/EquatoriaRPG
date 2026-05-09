@@ -380,6 +380,39 @@ export function createWorldMapScreen(
         ctx.textBaseline = 'bottom';
         ctx.fillText('⬡', node.cx, node.cy - node.radius - 3);
       }
+
+      // ── Level progress dots ────────────────────────────────────
+      // Show mini dots below the world name indicating mandatory-level progress.
+      // Only visible when the world is unlocked/current/completed.
+      if (s !== 'locked') {
+        const worldProgress = state.worlds.get(node.worldId);
+        const totalLevels   = worldData.mandatoryLevels.length;
+        const doneLevels    = worldProgress ? worldProgress.completedMandatoryLevelIds.size : 0;
+        if (totalLevels > 0) {
+          const dotRadius = 1.5;
+          const dotGap    = 3.5;
+          const dotRow    = node.cy + node.radius + 14; // below world name
+          const totalW    = (totalLevels - 1) * dotGap;
+          const startX    = node.cx - totalW / 2;
+          for (let d = 0; d < totalLevels; d++) {
+            const dx = startX + d * dotGap;
+            const isBossLevel = worldData.mandatoryLevels[d]?.type === 'boss';
+            ctx.beginPath();
+            ctx.arc(dx, dotRow, isBossLevel ? dotRadius * 1.4 : dotRadius, 0, Math.PI * 2);
+            if (d < doneLevels) {
+              // Completed dot — bright colour matching the world
+              ctx.fillStyle = color;
+            } else if (d === doneLevels && s !== 'completed') {
+              // Current dot — accent blue
+              ctx.fillStyle = COLOR_CURRENT;
+            } else {
+              // Future dot — dim
+              ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            }
+            ctx.fill();
+          }
+        }
+      }
     }
 
     // ── Unlock-flash rings (drawn after all nodes so they are on top) ──

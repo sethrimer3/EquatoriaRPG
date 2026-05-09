@@ -1,258 +1,89 @@
-# nextSteps.md — Continue Implementation: Level Completion, Quality Settings, Base 6
+# nextSteps.md — Continue Implementation
 
 ---
 
-## Continue Implementation (current session)
+## Implemented (this session)
 
-### What was implemented
+### `waveCount` in `LevelDefinition`
+- Added `readonly waveCount?: number` to `LevelDefinition` type (`levelTypes.ts`).
+- Updated `def()` helper in `worldLevelPlans.ts` to accept it as an optional last arg.
+- All 11 boss levels (level 10 of each world) set `waveCount: 5`.
+- `game-app.ts` `onPlay` uses `levelDef.waveCount ?? (levelDef.type === 'boss' ? 5 : 3)`.
 
-#### Level completion hook (`rpg-render.ts`, `game-app.ts`)
-- Added `onLevelComplete?: () => void` to `RpgRenderOptions`.
-- Added `WAVES_TO_COMPLETE_LEVEL = 3`: after the player clears 3 waves from the wave number at which the level was started, the callback fires once per level run.
-- Tracking state: `_levelStartWave`, `_levelCompleted`, `_levelCompleteBannerMs` — reset whenever `setActive(true)` is called.
-- A gold **"✨ Level Complete!"** canvas banner animates for 5 seconds with a fade-in/hold/fade-out curve and a "Return to map to claim your progress" subtitle.
-- In `game-app.ts`, `onLevelComplete` calls `markLevelComplete(worldMapProgressionState, worldId, levelId)` → `saveWorldMapProgression()` → logs the event.
-- When the player later taps "🗺 Map" / "Back to World Map" in the RPG menu, `worldMapScreen.refresh(worldMapProgressionState)` is already called in `showWorldMap()`, so the map reflects the new completion state immediately.
+### "🗺 Return to Map" post-completion CTA overlay button
+- A `.lvl-complete-overlay` DOM element (fixed, z=70) with a pulsing gold `.lvl-complete-overlay__btn` button is shown after `onLevelComplete` fires.
+- Hidden automatically when `showWorldMap()` is called, or when a new level starts.
+- CSS: animated `lvl-cta-pulse` keyframe gives it a breathing glow effect.
 
-#### World map particle quality setting (`settings-state.ts`, `settings-panel.ts`, `game-app.ts`)
-- Added `worldMapParticleQuality: 'full' | 'reduced' | 'low'` to `SettingsState` (default: `'full'`). Old saves without this field fall back to the default via the existing spread-defaults logic in `loadSettings`.
-- Added **"World Map Particles"** select row in the Settings panel (Full / Reduced / Low).
-- `createSettingsPanel` gains an optional `extraCallbacks` argument (`onWorldMapParticleQuality`).
-- `game-app.ts` passes the callback (a closure that calls `worldMapScreen.setParticleQuality`), and also applies the persisted quality immediately after creating `worldMapScreen`.
+### World-unlock pulse animation on world-map nodes
+- Added `scheduleNewWorldHighlight(worldId: WorldId)` to the `WorldMapScreen` interface.
+- When called, the target node plays a 4 s gold pulsing ring + "NEW!" label animation.
+- `game-app.ts` `onLevelComplete` snapshots previously-unlocked worlds, calls `markLevelComplete`, finds newly-unlocked worlds, and calls `scheduleNewWorldHighlight` for each.
 
-#### Base 6 challenges wired (`worldMapProgression.ts`)
-- `startOptionalChallenge(worldId, challengeId)` now calls the registered `_levelLauncher` (same as `startWorldLevel`).
-- The launcher passes `(worldId, challengeId)` to `game-app.ts` → `WORLD_LEVEL_PLANS.get(challengeId)` → opens `LevelScreen` if a `LevelDefinition` exists, or logs a warning otherwise.
-- This means any Base 6 challenges that have a matching entry in `WORLD_LEVEL_PLANS` can now be launched and played through, not just mandatory levels.
+### Hover tooltip on world-map canvas nodes
+- A `.wm-node-tooltip` DOM element is positioned in the `wm-body` so it can overflow the canvas area without clipping.
+- Appears on `mousemove` over a node; shows world name, chapter, and unlock state.
+- Hides on `mouseleave` or when cursor moves off a node.
+- CSS in `world-map.css`.
 
-### Files changed (this session)
-- `src/render/rpg/rpg-render.ts` — `onLevelComplete` option, completion tracking state + check, "Level Complete!" banner draw
-- `src/app/game-app.ts` — import `markLevelComplete`, wire `onLevelComplete`, apply particle quality on startup, pass `extraCallbacks` to settings panel
-- `src/settings/settings-state.ts` — `worldMapParticleQuality` field + default
-- `src/ui/panels/settings-panel.ts` — `extraCallbacks` parameter, "World Map Particles" select row
-- `src/systems/worldMapProgression.ts` — `startOptionalChallenge` uses `_levelLauncher`
+### FPS auto-detection in world-map anim loop
+- Rolling FPS tracked each frame in `animFrame`.
+- If FPS < 30 for ≥ 3 s: automatically reduces particle quality (`full → reduced`, then `reduced → low`).
+- If FPS > 50 for ≥ 5 s at reduced quality: restores one step upward.
+- Manual quality changes via `setParticleQuality()` reset FPS accumulators to avoid immediate re-override.
 
-### What still needs work
-1. **Level completion → world-unlock visual**: when `markLevelComplete` unlocks a new world, the world map should animate or highlight the newly unlocked node. Currently the node just changes from locked to current on the next map refresh.
-2. **Level-specific wave count**: currently every level completes after exactly 3 waves. A production game would read the wave count from the `LevelDefinition` (e.g., based on level number or type). A `waveCount` field on `LevelDefinition` + `MandatoryLevel` would let each level have a different challenge length.
-3. **Base 6 LevelDefinitions**: Base 6 challenges only open the LevelScreen if a matching entry exists in `WORLD_LEVEL_PLANS`. Most Base 6 IDs are not yet in that map — they need `LevelDefinition` entries, or the launcher needs a fallback that creates a generic Base 6 level layout.
-4. **Post-completion CTA**: after the "Level Complete!" banner, there's no in-arena button to go back to the world map. Players must use ⚔ Menu → Back to World Map. A persistent "🗺 Return to Map" button on the canvas after completion would improve UX.
-5. **Auto particle quality**: if FPS drops below ~40 fps, auto-reduce particle quality. A frame-rate monitor polling average frame time could drive `worldMapScreen.setParticleQuality('reduced')` automatically.
-6. **Tooltip on hover** for world nodes.
-7. **Level node granularity**: individual level sub-nodes on the spiral (not just world nodes).
+### Tutorial banners for first-encounter math objectives
+- Module-level `_seenObjectiveKinds` session Set in `rpg-math-objective-draw.ts`.
+- When a player encounters an objective kind for the first time, a brief (4 s) explanatory banner appears at the top of the canvas.
+- Banner fades in/out and shows a gold-bordered pill with a human-readable explanation (e.g. "Deal EXACTLY the shown damage!").
+- `resetObjectiveTutorials()` is called when `setActive(true)` is invoked (new level start).
 
----
+### Solvability guard for math objectives
+- Module-level `_currentPlayerAtk` in `rpg-math-objective-factory.ts`, updated via `setCurrentPlayerAtk(atk)`.
+- `applyEquipmentStats()` in `rpg-render.ts` calls `setCurrentPlayerAtk(playerStats.atk)` on every stat update.
+- All exact/threshold/sumTarget targets in the generic wave-tier bucket are clamped through `clampToReachable(value, maxMult)` so objectives are always achievable with a realistic number of hits at the player's current ATK.
 
-
-
-#### Critical coordinate system bug (mobile map invisible / unclickable)
-- **Root cause**: `normToCanvas()` used `canvas.width` / `canvas.height` (backing-store pixels, which are `CSS px × DPR`) while `ctx.setTransform(dpr,0,0,dpr,0,0)` means all drawing coordinates must be in CSS pixels.
-  - On DPR=2 a world node at normalised position 0.5, 0.5 would be drawn at (canvas.width/2, canvas.height/2) in the transform-scaled context, which maps to backing-store pixel `canvas.width` — the bottom-right corner.
-  - Nodes were effectively placed off-screen by a factor of DPR.
-- **Fix** (`WorldMapScreen.ts`):
-  - `normToCanvas()` now uses `canvasArea.clientWidth / clientHeight` (CSS pixels, always correct).
-  - `clientToCanvas()` now returns `clientX - rect.left` / `clientY - rect.top` (CSS px, no DPR multiplier). Node positions and hit-test coordinates are now in the same space.
-  - `drawMap()` `clearRect` now uses CSS pixel dimensions, not backing-store dimensions.
-  - `NODE_HIT_EXPAND` increased from 8 to 22 CSS px for comfortable finger-sized touch targets.
-- **Result**: world nodes render in the correct positions on all DPR values (1×, 2×, 3×). Tapping/clicking works on mobile.
-
-#### Mobile layout improvements (`world-map.css`)
-- Canvas area height on portrait mobile increased from `52vw / 200px min` to `55vw / 220px min / 60vh max`.
-- Touch-action on canvas changed from `touch-action: none` to `touch-action: manipulation` (allows single-tap while suppressing double-tap zoom, preventing browser interference with node taps).
-- Added `.wm-mobile-hint` label ("Tap a world node to select a level") — visible only on `max-width: 600px` via media query, positioned at the bottom of the canvas area.
-
-#### Level Screen Play button wired (`LevelScreen.ts`)
-- `createLevelScreen` now accepts an optional `onPlay?: (levelDef: LevelDefinition) => void` callback.
-- When `onPlay` is provided: play button is enabled and labelled "▶ Play Level".
-- When omitted: play button remains disabled with "▶ Play Level (Coming Soon)" as before (backward-compatible).
-
-#### Campaign flow wired — Level → RPG arena (`game-app.ts`)
-- `createLevelScreen` now receives an `onPlay` callback that:
-  1. Hides the level screen.
-  2. Shows `rpgContainer` and `rpgRender.statsPanel`.
-  3. Calls `rpgRender.setActive(true)` and `rpgRender.resize(rpgContainer)`.
-  4. Calls `gameLoop.start()`.
-  - This creates the complete flow: World Map → Level Screen → ▶ Play Level → RPG Arena.
-- `registerLevelLauncher` now also sets `activeLevelWorldId` / `activeLevelId` so future completion hooks know which world/level is active.
-- Active level context variables (`activeLevelWorldId`, `activeLevelId`) are in place for future level-completion wiring.
-
-#### World map progression persistence (`save-load.ts`, `settings/index.ts`, `game-app.ts`)
-- Added `saveWorldMapProgression(state)` and `loadWorldMapProgression()` in `save-load.ts`, using a separate `equatoria_worldmap` localStorage key.
-- Both use `serializeWorldMapState` / `deserializeWorldMapState` from `worldMapProgression.ts` (already had full defensive parsing and version tolerance).
-- `game-app.ts` now loads world-map progression on startup; falls back to fresh state if absent.
-- World map state is saved:
-  - When `showWorldMap()` is called (entering map from RPG).
-  - When `goToMainMenu()` is called (before page reload).
-  - On `visibilitychange` to hidden (tab switch / home button on mobile).
-- Old saves without `equatoria_worldmap` load cleanly with fresh progression (no corruption).
-
-### Files changed
-- `src/ui/world-map/WorldMapScreen.ts` — coordinate system fix, hit expand, mobile hint
-- `src/styles/world-map.css` — mobile layout, touch-action, hint label style
-- `src/ui/level-screen/LevelScreen.ts` — optional onPlay callback, enable play button
-- `src/app/game-app.ts` — wire onPlay, load/save world map progression, active level context
-- `src/settings/save-load.ts` — saveWorldMapProgression / loadWorldMapProgression
-- `src/settings/index.ts` — export new save functions
-
-### What still needs work
-1. **Level completion hook**: `activeLevelWorldId` / `activeLevelId` are tracked but there is no RPG-side victory detection yet. When the player wins a wave run, `markLevelComplete(state, activeWorldId, activeLevelId)` should be called and `worldMapScreen.refresh(worldMapProgressionState)` invoked to keep the map current.
-2. **Particle quality from settings**: `worldMapScreen.setParticleQuality(q)` is available but no settings UI exposes it. Could be added to the Settings panel.
-3. **Base 6 gameplay**: `startOptionalChallenge` is still a stub. Base 6 click behavior is consistent (same level-item UI) but launching a challenge does nothing yet.
-4. **Level node granularity**: world map shows 11 world nodes; showing individual mandatory levels and challenges as sub-nodes along the spiral remains future work.
-5. **Tooltip on hover** for world nodes.
-6. **Auto quality detection**: reduce particle count when FPS is poor (frame-rate monitor → setParticleQuality).
-
-### Coordinate system rules (document for future sessions)
-- All world-map drawing uses CSS-pixel coordinates via the DPR context transform.
-- `normToCanvas()` must use `canvasArea.clientWidth / clientHeight` — never `canvas.width / canvas.height`.
-- `clientToCanvas()` must return `clientX - rect.left` — never multiply by `canvas.width / rect.width`.
-- `particleSys.resize/update` must receive CSS-pixel center and radius — never multiply by DPR.
-- `clearRect` must use CSS-pixel dimensions (or reset transform first).
-
-### Known limitations
-- The "Back to World Map" path does not currently refresh the world map state after a level run. If the player completes a level in the future, the world map will reflect changes only after the next explicit `worldMapScreen.refresh()` call.
-- Returning from RPG to World Map via `showWorldMap()` calls `gameLoop.stop()` correctly; the RPG loop does not run while the world map is displayed.
+### Level progress dots on world-map nodes
+- Small dots arranged horizontally below the world name on each node.
+- Completed levels → world-color dots.
+- Current level → accent-blue dot.
+- Upcoming levels → dim white dots.
+- Boss level dot is slightly larger (1.4× radius).
+- Only shown when world is unlocked/current/completed (not locked).
 
 ---
 
+## Files changed (this session)
 
-- **Navigation flow**: `Start Game` now opens the **World Map** first, not the RPG arena directly.
-  - `game-app.ts` shows `worldMapScreen` in the `onStartGame` callback instead of the RPG container.
-  - RPG container and stats bar remain hidden until a level is launched from the world map.
-- **"← Main Menu" button** on the World Map header replaces the generic back button when the map is the entry point. Clicking it auto-saves persistent progress and reloads the page (resets to main menu cleanly).
-- **World Map particle simulation** — real-time animated particle system for the world map canvas:
-  - `src/render/world-map/worldMapParticles.ts` — new module.
-  - 1000 particles (default/full quality), 500 reduced, 250 low.
-  - Particles spiral inward from the outer white-hole edge toward the central black hole.
-  - Zone-based color transitions: pale sand → silver → gold (outer) → quartz/cyan → ruby → sunstone → emerald → sapphire → violet → diamond (inner).
-  - Angular speed increases near center (conservation-of-momentum feel).
-  - Each particle shimmers/glints with individual phase/speed variation.
-  - Black hole at center: gravitational gradient + dark core + event-horizon ring.
-  - White hole at outer edge: soft luminous glow along the outer boundary.
-  - Particles fade out near the black hole and reappear at the white hole.
-  - Simulation pauses when the world map is hidden.
-- **Continuous RAF animation loop** in `WorldMapScreen.ts`:
-  - `startAnimLoop()` / `stopAnimLoop()` manage the animation frame.
-  - `drawMap()` is now called every frame (particles need continuous redraw).
-  - ResizeObserver re-initializes particle positions when dimensions change.
-  - `setParticleQuality()` method allows runtime quality switching.
-- **RPG Menu navigation** — two new buttons added to the ⚔ Menu → Menu tab:
-  - **🗺 Back to World Map** — shows an inline confirmation ("Progress in this level will be lost. Are you sure?") with Cancel / Confirm buttons.
-  - **🏠 Back to Main Menu** — same inline confirmation flow.
-  - Both buttons defined in `rpg-menu-tab.ts` via `RpgMenuNavCallbacks` interface.
-  - CSS styles added to `panels.css` (`.rpg-menu__nav-section`, `.rpg-menu__nav-btn`, `--danger`, `--confirm`, `.rpg-menu__nav-warning`).
-- **RPG menu panel** now accepts `navCallbacks?: RpgMenuNavCallbacks` as a 4th parameter in both `createRpgMenuPanel` and `createRpgMenuTabPane`.
-- **Game loop control**: `createGameLoop` in `app-game-loop.ts` now returns a `{ start, stop, isRunning }` object instead of a bare function. The game loop can be paused/resumed without recreating it.
-- **Forward-reference pattern** in `game-app.ts`: all navigation helpers (`showWorldMap`, `goToMainMenu`) are defined before the objects they reference, using JavaScript closure semantics. No double-creation of any panel.
-- **Level screen "Back" button** now returns to the World Map instead of just closing.
-- **Build passes**: `npm run typecheck` and `npm run build` both succeed with zero errors.
-
-### What was partially completed
-- **"Enter Game" / "Play Level" from World Map**: the Level Screen still shows "Play Level (Coming Soon)". The world map shows level details and the level screen previews level layout, but the bridge from "Play Level" to actual RPG gameplay (starting `gameLoop` from the world map detail screen) is not yet wired.
-  - The RPG arena is still accessible via the existing game flow (level launched from world map → level screen → coming-soon play button). The full bridge requires wiring `levelScreen`'s play button to `hideWorldMapAndStartGame()`.
-- **Save/load for world map progression**: `serializeWorldMapState` / `deserializeWorldMapState` helpers exist in `worldMapProgression.ts` but are not yet integrated into `saveGame` / `loadGame`. World map progression resets on reload.
-
-### What still needs work
-1. **Wire "Play Level" button** in `LevelScreen.ts` to start the RPG game loop. Remove the "Coming Soon" disabled state once the bridge logic is in place.
-2. **Integrate world map save/load** — call `serializeWorldMapState` in `saveGame()` and `deserializeWorldMapState` in `loadGame()` so completed/unlocked levels persist.
-3. **Particle quality from settings** — expose a world map particle quality dropdown in the Settings panel. Call `worldMapScreen.setParticleQuality(q)` from the settings change handler.
-4. **Black hole visual polish** — the current black hole is a radial gradient. A more dramatic ring/accretion disk effect would be visually striking.
-5. **Dedicated "Enter Campaign" button** on the world map for players who want to jump directly into the RPG arena without selecting a specific level first.
-6. **Level node granularity on the map** — currently the map shows 11 world nodes; adding individual level nodes along the spiral for each world's 10 mandatory levels + 6 challenges would complete the "1000-level spiral" visual concept.
-7. **Tooltip on hover** — show a tooltip or info panel when hovering over a level/world node.
-8. **World map resize edge case** — when the world map is resized while hidden, the particle system reinitializes but the first frame after re-show may flicker. A guard against zero-size canvas would help.
-
-### Important architectural notes
-- **Forward-reference pattern**: `worldMapScreen` and `gameLoop` are declared with `let = null!` before the navigation helpers that reference them, then assigned later. This is safe because the helpers are only called at user-interaction time (after all setup completes). TypeScript is satisfied via the `!` definite assignment assertion.
-- **Game loop control**: the new `GameLoop.stop()` must be called before showing the world map (or main menu). Forgetting this would leave the RPG game loop running while the world map is displayed, causing invisible wasted CPU.
-- **Main menu re-entry**: `goToMainMenu()` calls `window.location.reload()` after auto-saving. This is intentional — the main menu's fly-off animation and RAF teardown make in-place re-entry complex. A future session could implement a true `mainMenu.reset()` path if desired.
-- **Particle simulation independence**: the particle simulation in `worldMapParticles.ts` has no knowledge of the world map data model. It uses only canvas geometry (center, maxRadius). This keeps it clean and reusable.
-
-### Performance concerns
-- 1000 particles at 60fps with per-particle glow passes may be heavy on low-end mobile. The quality tiers (full/reduced/low) mitigate this, but quality auto-detection (based on frame rate) is not yet implemented.
-- The glow pass in `worldMapParticles.ts` runs for every particle where `shimmer > 0.8` (roughly ~20% of particles per frame). This could be reduced further with a `reduceGlow` flag.
-- `drawMap()` is called every frame even when particles haven't changed significantly. A dirty-flag optimization (only redraw when particle state changes meaningfully) would reduce overdraw.
-
-### Files to inspect first in a future session
-- `src/app/game-app.ts` — bootstrap and navigation wiring (all screen transitions live here)
-- `src/app/app-game-loop.ts` — game loop with stop/start control
-- `src/ui/world-map/WorldMapScreen.ts` — world map with particle integration and animation loop
-- `src/render/world-map/worldMapParticles.ts` — particle simulation (new)
-- `src/ui/panels/rpg-menu-tab.ts` — Back to World Map / Back to Main Menu confirmation flow
-- `src/ui/panels/rpg-menu-panel.ts` — passes `navCallbacks` through to tab pane
-- `src/styles/panels.css` — nav button styles (at end of file)
+- `src/types/levelTypes.ts` — `waveCount?` in `LevelDefinition`
+- `src/data/worldLevelPlans.ts` — `def()` accepts `waveCount`; all 11 boss defs get `waveCount: 5`
+- `src/app/game-app.ts` — `waveCount` usage in onPlay; world-unlock detection; Return-to-Map overlay; `getWorldUnlockState`/`WorldId` imports
+- `src/ui/world-map/WorldMapScreen.ts` — `scheduleNewWorldHighlight`, unlock-flash animation, hover tooltip, FPS auto-quality, level progress dots
+- `src/render/rpg/rpg-math-objective-draw.ts` — tutorial banner system (`maybeShowTutorialBanner`, `drawTutorialBanner`, `resetObjectiveTutorials`, `OBJECTIVE_EXPLANATIONS`)
+- `src/render/rpg/rpg-math-objective-factory.ts` — `setCurrentPlayerAtk`, `clampToReachable`, clamped generic bucket targets
+- `src/render/rpg/rpg-render.ts` — `drawTutorialBanner` + `resetObjectiveTutorials` call-sites; `setCurrentPlayerAtk` call in `applyEquipmentStats`
+- `src/styles/canvas.css` — `.lvl-complete-overlay` + `.lvl-complete-overlay__btn` + `@keyframes lvl-cta-pulse`
+- `src/styles/world-map.css` — `.wm-node-tooltip`
 
 ---
 
+## What still needs work
 
+1. **World-map level granularity (sub-nodes)**: The progress dots give per-level feedback, but individual tappable level sub-nodes arranged around each world node would be even clearer. Each sub-node could show the level number + type, be tappable, and open the LevelScreen directly.
 
-## What was implemented
+2. **Charge attack mechanic**: A hold-to-charge mechanic (joystick or spacebar) that builds damage (1× → 2× → 3×) over 1–2 seconds would add depth for exact/threshold objectives. Requires:
+   - Charge state on player
+   - Visual charging effect (expanding glow)
+   - Damage multiplier applied on release
 
-### Math objective system
-- **Core type system** in `src/sim/rpg/math-objective-types.ts`: `MathObjective`, 11-kind discriminated union, `HasMathObjective`, `quantizeMathDamage`, `formatMathCompact`.
-- **Evaluation logic** in `src/sim/rpg/math-objectives.ts`: factory helpers for all 11 kinds, `evaluateHit`, `applyAcceptedHit`, `applyRejectedHit`, `tickObjectiveFeedback`.
-- **Supported objective kinds**: `threshold` (>=N), `exact` (=N), `digitEnding` (_N), `modulo` (mod M=R), `hitCount` (#N), `sumTarget` (Sigma N), `sequence` (increasing / differentValues / exactSequence), `factor` (|N), `approximate` (~=N), `integralAccumulation` (integral N), `geometryArea` (A=WxH).
-- **Damage integration** in `rpg-damage.ts`: `maybeApplyMathObjectiveDamage` helper integrated into all 16 body-enemy damage functions (including AlivenSwarm). Rejected hits return 0 and do not subtract HP. Solved objectives set `hp = 0` so existing `removeDeadEnemies` logic fires XP, lucky motes, and wave completion normally.
-- **Visual overlay** in `src/render/rpg/rpg-math-objective-draw.ts`:
-  - Progress ring/arc, central symbol, compact value text.
-  - **Actual feedback text** displayed (e.g. "needs ≥15", "too high (=25)", "Σ 45/200") — players see exactly what the objective requires.
-  - **equationSnake display mode**: Diamond-class enemies render their equation text in gold (e.g. "x = 15", "12 → 19 → 27") for visual distinction.
-  - SOLVED! burst animation (expanding gold ring + rising text).
-  - `drawMathObjectivesForArray` generic helper called for all 16 body enemy types.
-- **Enemy typing**: `mathObjective?: MathObjective` added to all 16 body-enemy interfaces.
-- **Factory integration** in `rpg-factories.ts`: `maybeAttachMathObjective` attaches objectives at spawn time. Wave-progressive ramp. Per-enemy-kind biases at wave 31+.
-  - Iolite → integralAccumulation/sumTarget.
-  - Diamond → exact/exactSequence (equationSnake mode, **wave-scaled targets** so they match late-game ATK).
-  - Quartz → factor/geometryArea.
-  - Amethyst → sequence/sumTarget.
-  - Citrine → modulo/digitEnding.
-  - Nullstone → approximate (**directional feedback**: "too high!" / "too low").
-  - Fracteryl → integralAccumulation/sumTarget.
-  - Eigenstein → exactSequence (**wave-scaled**) / geometryArea.
-  - Alivened → hitCount/sumTarget.
-- **Render wiring** in `rpg-render.ts`: `drawMathObjectivesForArray` called after each body-enemy draw pass for all 16 enemy types. Low-graphics mode now correctly forwarded to `rpg-enemy-draw-adv.ts` (fixes advanced enemies ignoring the setting).
-- **SOLVED! animation** in `rpg-math-objective-draw.ts`: expanding gold ring burst + rising "SOLVED!" text.
+3. **Persistent session tracking for tutorials**: Currently `_seenObjectiveKinds` is per-session (page reload clears it). Persisting this set to `localStorage` would let returning players skip redundant hints across sessions.
 
-### Particle-life simulation enemies (AlivenSwarm)
-- **Type definitions** (`rpg-enemy-types.ts`): `AlivenSwarmEnemy`, `AlivenSwarmParticle`, 4-tier interaction matrix.
-- **Physics** (`rpg-enemy-updates-alivened.ts`): Particle Life simulation — group drift toward player, inter-particle attraction/repulsion via 4×4 matrix, cohesion, boundary clamping, velocity damping. Zero allocation in hot path (pre-allocated Float64Array force buffers).
-- **Drawing** (`rpg-enemy-draw-adv.ts`): Per-particle glow dots with tier-matched colors, HP bar, math objective overlay at centroid.
-- **Damage** (`rpg-damage.ts`): `damageAlivenSwarmEnemy` — hits nearest particle, removes it on kill, recomputes total HP. Math objective routing supported.
-- **Factory** (`rpg-factories.ts`): `makeAlivenSwarmEnemy` spawns `ALIVEN_PARTICLE_COUNT` particles evenly distributed across 4 tiers.
-- **Spawn** (`rpg-enemy-spawn.ts`): `spawnEnemyById` handles `'alivened'`.
-- **Wave integration** (`wave-definitions.ts`): Alivened swarms appear from wave 95+ (1–2 per wave).
-- **Wave lifecycle** (`rpg-wave-manager.ts`): `removeDeadEnemies` sweeps empty/zero-HP swarms; `checkWaveCompletion` waits for all swarms.
-- **Targeting** (`rpg-targeting.ts`): Targets nearest living particle within the swarm.
+4. **Level node granularity on world map spiral**: Full separate sub-node ring around each world node, each tappable to open a specific level's LevelScreen.
 
-## What is NOT yet implemented
+5. **Per-enemy-kind solvability guard**: The `clampToReachable` function is only applied to the generic bucket. The per-enemy-kind biases (diamond, eigenstein, etc.) already use `getWaveStatScale` scaling and are less likely to need clamping, but could be hardened further.
 
-- **Full sinuous equation snake body**: equationSnake mode renders the equation text label in gold above the enemy, but does not implement a per-glyph segmented body that follows the enemy's movement path. Full body rendering is deferred.
-- **Solvability guard**: no check at spawn time that objective targets are reachable by the player. The wave-scaled exact targets (for Diamond/Eigenstein) partially address this, but a proper guard using player ATK is not implemented.
-- **Companion ship hit filtering**: companion ship attacks count toward math objectives. A `sourceRules` field on `MathObjective` could filter this.
-- **Damage-shaping player tools**: no charge attacks, digit modifiers, or weapon runes to help players hit specific math values.
-- **Tutorial banners**: no first-encounter explanation for each objective kind.
-- **Persist seen-objectives set**: tutorial hint system not implemented yet.
-- **Wave-definition-level objective hints**: `wave-definitions.ts` cannot force a specific objective kind on a spawn entry.
+6. **Auto-particle quality persistence**: Currently FPS auto-detection changes quality at runtime but doesn't save the reduced setting to `SettingsState`. If a device consistently runs below 30 fps, the auto-reduction should write back to settings on the next save.
 
-## Known limitations
+7. **Back-button / swipe gesture**: On Android/iOS, the system back gesture currently reloads the page (which triggers a save). A proper in-app back handler would let players go from RPG → World Map without a reload.
 
-- Math objectives evaluate post-DEF damage. This means high-DEF enemies reduce the effective damage value seen by the objective.
-- Feedback text from multiple enemies may visually overlap on crowded screens.
-- The label cache in `rpg-math-objective-draw.ts` evicts entries in insertion order (FIFO, not strict LRU).
-- AlivenSwarm force buffers are allocated as Float64Array(64) — swarms with more than 64 particles would overflow. Current `ALIVEN_PARTICLE_COUNT` is well below this limit.
-
-## Recommended next work
-
-1. **Full equation snake body** — implement a sinuous segmented glyph body path for `displayMode: 'equationSnake'` enemies. Requires storing a position trail on the enemy and placing glyphs at trail points.
-2. **Solvability guard** — at factory creation time, pass player ATK to `maybeAttachMathObjective` and clamp/scale exact targets to the achievable damage range.
-3. **Damage-shaping tools** — charge attack (multiplies next hit value), digit lock (forces last digit of next hit), precision rune (reduces damage variance) as RPG upgrade options.
-4. **Source filtering** — `sourceRules` on `MathObjective` to exclude companion ship hits.
-5. **Tutorial system** — show a brief label on first encounter of each objective kind.
-6. **Persist seen-objectives set** across sessions so tutorials only show once.
-7. **Wave-definition-level objective hints** — scripted tutorial waves that force a specific objective kind.
-
-## Design decisions
-
-- Math objectives evaluate post-DEF damage (documented in `rpg-damage.ts`).
-- Wave attachment ratios (25%/30%/35%/40%) are conservative; tune based on playtesting.
-- `approximate` objectives give directional feedback ("too high!" vs "too low") so players can adjust their weapon tier/combo.
+8. **Enemy wave scaling for campaign levels**: Currently all campaign levels share the same wave-definition data from `wave-definitions.ts`. Level-specific tuning (weaker enemies for early levels, specific enemy mixes per world theme) would make each level feel unique.

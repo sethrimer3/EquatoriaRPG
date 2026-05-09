@@ -85,7 +85,8 @@ import {
   drawAlivenSwarmEnemies,
   setLowGraphicsMode as setAdvEnemyLowGraphics,
 } from './rpg-enemy-draw-adv';
-import { drawMathObjectivesForArray } from './rpg-math-objective-draw';
+import { drawMathObjectivesForArray, drawTutorialBanner, resetObjectiveTutorials } from './rpg-math-objective-draw';
+import { setCurrentPlayerAtk } from './rpg-math-objective-factory';
 import {
   drawBossProjectiles,
   drawSandProjectiles,
@@ -532,6 +533,9 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
     playerStats.regen = PLAYER_REGEN_INIT;
     // Player ATK is the base multiplier (not including per-weapon tier damage).
     playerStats.atk = PLAYER_ATK_INIT + getEffectiveXpAtkBonus(rpgSimState);
+    // Keep the math-objective factory in sync so targets are scaled to the
+    // player's actual ATK, making objectives solvable at any progression stage.
+    setCurrentPlayerAtk(playerStats.atk);
     // Bonus max-HP from XP wired to HP stat.
     const hpBonus = getEffectiveXpHpBonus(rpgSimState);
     const newMaxHp = PLAYER_HP_INIT + hpBonus;
@@ -1199,6 +1203,11 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
 
     if (rpgPhase === 'alive') drawWaveClearBanner(ctx, isInterWave, currentWave, interWaveTimerMs, widthPx, heightPx);
 
+    // ── First-encounter tutorial banner for math objectives ──────────
+    if (rpgPhase === 'alive') {
+      drawTutorialBanner(ctx, _currentDeltaMs, widthPx, heightPx);
+    }
+
     // ── Level Complete! victory banner ────────────────────────────
     if (_levelCompleted && _levelCompleteBannerMs < LEVEL_COMPLETE_BANNER_DURATION_MS) {
       const t = _levelCompleteBannerMs / LEVEL_COMPLETE_BANNER_DURATION_MS;
@@ -1490,6 +1499,9 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
         _levelStartWave = currentWave;
         _levelCompleted = false;
         _levelCompleteBannerMs = 0;
+        // Reset tutorial banners so the player sees first-encounter hints
+        // for any objectives they haven't seen this level run.
+        resetObjectiveTutorials();
       }
     },
 
