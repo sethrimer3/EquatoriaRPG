@@ -224,6 +224,17 @@ export interface RpgRender {
    * different challenge lengths.  Defaults to WAVES_TO_COMPLETE_LEVEL (3).
    */
   setLevelWaveTarget(waveCount: number): void;
+  /**
+   * Set an optional per-enemy-type spawn multiplier applied when building each
+   * wave's spawn queue.  Pass an empty object (or call with no argument) to
+   * clear all biases.  Call before setActive(true) for the new level so the
+   * first wave is already biased.
+   *
+   * Examples:
+   *   { quartz: 1.8, laser: 0.6 }  — crystal-heavy world
+   *   { void: 2.0, nullstone: 1.5 } — void/dark world
+   */
+  setWaveEnemyBias(bias: Partial<Record<string, number>>): void;
 }
 
 /** Options passed to createRpgRender. */
@@ -353,6 +364,14 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
   let screenDarken     = 0;
   let restartFadeAlpha = 0;
   const deathParticles: DeathParticle[] = [];
+
+  // ── Wave enemy bias (per-level / per-world flavour) ─────────────
+  /**
+   * Optional multiplier per enemy type applied when building each wave's spawn
+   * queue.  Values > 1 boost counts; values < 1 reduce them; 0 removes a type.
+   * Set via setWaveEnemyBias(); reset to {} when setActive(false) is called.
+   */
+  let _waveEnemyBias: Partial<Record<string, number>> = {};
 
   // ── Player attack state ────────────────────────────────────────
   const hitEffects: HitEffect[] = [];
@@ -764,6 +783,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
     setInterWaveTimerMs:     (ms) => { interWaveTimerMs = ms; },
     enterBossWave:           () => bossWave.enterBossWave(),
     exitBossWave:            () => bossWave.exitBossWave(),
+    getWaveEnemyBias:        () => _waveEnemyBias,
   });
 
   // ── Create weapon systems ──────────────────────────────────────
@@ -1585,6 +1605,9 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
       if (!active) {
         keys.left = keys.right = keys.up = keys.down = keys.charge = false;
         chargeMs = 0;
+        // Clear the wave bias so a stale campaign bias doesn't leak into
+        // endless mode or a subsequent level.
+        _waveEnemyBias = {};
       }
       if (active) {
         applyEquipmentStats();
@@ -1655,6 +1678,10 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
 
     setLevelWaveTarget(waveCount: number): void {
       _wavesToCompleteLevel = Math.max(1, Math.round(waveCount));
+    },
+
+    setWaveEnemyBias(bias: Partial<Record<string, number>>): void {
+      _waveEnemyBias = bias;
     },
   };
 }

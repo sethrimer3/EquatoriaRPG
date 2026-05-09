@@ -375,10 +375,10 @@ export async function startApp(): Promise<void> {
       // Activate and resize the RPG renderer
       rpgRender.setActive(true);
       rpgRender.resize(rpgContainer);
-      // Set wave target based on level definition:
-      //   Use the explicit waveCount field when available; fall back to
-      //   type-based defaults: boss → 5 waves, others → 3 waves.
+      // Set wave target based on level definition.
       rpgRender.setLevelWaveTarget(levelDef.waveCount ?? (levelDef.type === 'boss' ? 5 : 3));
+      // Apply per-world enemy bias so each level has a distinct flavour.
+      rpgRender.setWaveEnemyBias(levelDef.waveEnemyBias ?? {});
       // Start the game loop
       gameLoop.start();
       // Confirm active level context (set by registerLevelLauncher above, but

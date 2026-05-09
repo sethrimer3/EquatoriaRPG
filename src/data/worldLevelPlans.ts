@@ -64,6 +64,48 @@ const MOTIFS: Record<WorldId, string[]> = {
   eigen_citadel:       ['λ', 'Av=λv', '↻', '⊥', '∀', '∃'],
 };
 
+// ─── Per-world wave enemy biases ──────────────────────────────────
+// Each world emphasises different enemy types to give levels a distinct
+// mechanical flavour.  Values > 1 boost counts; < 1 reduce; 0 removes.
+
+/** Origin Nexus — balanced introductory mix, no heavy enemies */
+const BIAS_ORIGIN: Partial<Record<string, number>> = { laser: 1.0, quartz: 1.0, void: 0, iolite: 0, amethyst: 0, diamond: 0, nullstone: 0, fracteryl: 0, eigenstein: 0 };
+/** Arithmetic Sands — ruby-fast + sunstone area; no stealth/teleport */
+const BIAS_ARITH: Partial<Record<string, number>> = { ruby: 1.6, sunstone: 1.4, laser: 1.2, quartz: 0.8, emerald: 0, fracteryl: 0, eigenstein: 0 };
+/** Fraction Fen — quartz crystal + sapphire missiles; methodical pacing */
+const BIAS_FRAC: Partial<Record<string, number>> = { quartz: 1.8, sapphire: 1.5, laser: 0.6, ruby: 0.5, void: 0 };
+/** Algebra Grove — emerald blink + citrine fast patrol; x-solving feel */
+const BIAS_ALG: Partial<Record<string, number>> = { emerald: 1.7, citrine: 1.5, laser: 1.0, quartz: 0.7, void: 0.4 };
+/** Geometry Peaks — amber spread + quartz crystal; area-awareness feel */
+const BIAS_GEO: Partial<Record<string, number>> = { amber: 1.8, quartz: 1.6, sunstone: 1.2, laser: 0.7, void: 0 };
+/** Coordinate City — citrine + sapphire grid feel; fast positioning */
+const BIAS_COORD: Partial<Record<string, number>> = { citrine: 1.7, sapphire: 1.4, ruby: 1.3, laser: 1.0, void: 0.3 };
+/** Calculus Falls — iolite beams + void pressure; sustained engagement */
+const BIAS_CALC: Partial<Record<string, number>> = { iolite: 1.8, void: 1.4, amethyst: 1.2, laser: 0.8, citrine: 0.7 };
+/** Probability Gardens — amethyst swarm + amber spread; chaotic mix */
+const BIAS_PROB: Partial<Record<string, number>> = { amethyst: 1.9, amber: 1.5, fracteryl: 1.1, laser: 0.7, quartz: 0.6 };
+/** Matrix Bastion — diamond phase + nullstone gravity; tanky walls */
+const BIAS_MAT: Partial<Record<string, number>> = { diamond: 1.8, nullstone: 1.5, iolite: 1.2, laser: 0.5, quartz: 0.5 };
+/** Fractal Expanse — fracteryl + eigenstein recursive; complex patterns */
+const BIAS_FRACT: Partial<Record<string, number>> = { fracteryl: 2.0, eigenstein: 1.6, nullstone: 1.2, laser: 0.4, quartz: 0.4 };
+/** Eigen Citadel — eigenstein + alivened swarm; final-boss intensity */
+const BIAS_EIGEN: Partial<Record<string, number>> = { eigenstein: 2.2, alivened: 1.8, fracteryl: 1.4, nullstone: 1.0, laser: 0.3 };
+
+/** Map from WorldId to the default wave enemy bias for that world. */
+const WORLD_BIAS: Record<WorldId, Partial<Record<string, number>>> = {
+  origin_nexus:        BIAS_ORIGIN,
+  arithmetic_sands:    BIAS_ARITH,
+  fraction_fen:        BIAS_FRAC,
+  algebra_grove:       BIAS_ALG,
+  geometry_peaks:      BIAS_GEO,
+  coordinate_city:     BIAS_COORD,
+  calculus_falls:      BIAS_CALC,
+  probability_gardens: BIAS_PROB,
+  matrix_bastion:      BIAS_MAT,
+  fractal_expanse:     BIAS_FRACT,
+  eigen_citadel:       BIAS_EIGEN,
+};
+
 // ─── Helper ───────────────────────────────────────────────────────
 
 function def(
@@ -77,8 +119,11 @@ function def(
   room: ReturnType<typeof makeTeachChamber>,
   placeholderMechanics?: string[],
   waveCount?: number,
+  waveEnemyBias?: Readonly<Partial<Record<string, number>>>,
 ): LevelDefinition {
-  return { id: `layout_${levelId}`, worldId, levelId, name, type, archetype, description, objective, room, placeholderMechanics, waveCount };
+  // If no explicit bias is given, fall back to the world-level default.
+  const bias = waveEnemyBias ?? WORLD_BIAS[worldId];
+  return { id: `layout_${levelId}`, worldId, levelId, name, type, archetype, description, objective, room, placeholderMechanics, waveCount, waveEnemyBias: bias };
 }
 
 const plans: LevelDefinition[] = [];

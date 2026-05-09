@@ -125,4 +125,12 @@ export interface LevelDefinition {
    * (boss → 5 waves, others → 3 waves).
    */
   readonly waveCount?: number;
+  /**
+   * Optional per-enemy-type spawn multipliers for this level.
+   * Values > 1 boost counts; values < 1 reduce them; 0 removes the type.
+   * Used to give each world a distinct enemy composition flavour.
+   *
+   * Example: `{ quartz: 1.8, laser: 0.5 }` for a crystal-heavy level.
+   */
+  readonly waveEnemyBias?: Readonly<Partial<Record<string, number>>>;
 }
