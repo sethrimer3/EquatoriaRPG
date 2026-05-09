@@ -346,10 +346,6 @@
   gap: 1px;
 }
 
-.wm-level-name {
-  /* kept for compatibility — no flex: 1 here; parent wrap handles the flex */
-}
-
 .wm-level-desc {
   font-size: 10px;
   color: var(--text-secondary);
