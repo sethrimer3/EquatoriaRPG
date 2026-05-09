@@ -416,7 +416,6 @@ export function createWorldMapScreen(
     }
 
     // ── Unlock-flash rings (drawn after all nodes so they are on top) ──
-    const nowMs = performance.now();
     for (const [wId, remaining] of unlockFlashes) {
       const node = nodes.find(n => n.worldId === wId);
       if (!node) continue;
@@ -449,8 +448,6 @@ export function createWorldMapScreen(
       ctx.shadowBlur = 0;
       ctx.restore();
     }
-    // Reset time tracking (not used by nowMs — included only to satisfy linter).
-    void nowMs;
   }
 
   // ─── Detail panel rendering ──────────────────────────────────────
@@ -551,17 +548,21 @@ export function createWorldMapScreen(
       ].filter(Boolean);
       nodeTooltip.innerHTML = lines.join('<br>');
       // Position the tooltip in the canvas area's coordinate space.
-      // Use canvas bounding rect to convert client coords to body-relative.
       const canvasRect = canvas.getBoundingClientRect();
       const bodyRect   = body.getBoundingClientRect();
-      const tooltipX = e.clientX - bodyRect.left + 14;
+      let tooltipX = e.clientX - bodyRect.left + 14;
       const tooltipY = e.clientY - bodyRect.top  - 8;
+      // Clamp so the tooltip doesn't overflow beyond the canvas right edge.
+      // We estimate the tooltip width conservatively (80 px) as we can't
+      // measure it before rendering without forcing layout.
+      const TOOLTIP_EST_WIDTH = 120;
+      const canvasRight = canvasRect.right - bodyRect.left;
+      if (tooltipX + TOOLTIP_EST_WIDTH > canvasRight) {
+        tooltipX = Math.max(0, e.clientX - bodyRect.left - TOOLTIP_EST_WIDTH - 6);
+      }
       nodeTooltip.style.left = `${tooltipX}px`;
       nodeTooltip.style.top  = `${tooltipY}px`;
       nodeTooltip.style.display = '';
-      // Suppress unused-variable lint (canvasRect only used for a future
-      // clamping step if the tooltip overflows the right edge).
-      void canvasRect;
     } else {
       nodeTooltip.style.display = 'none';
     }

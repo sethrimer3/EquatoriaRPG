@@ -64,8 +64,12 @@ export function setCurrentPlayerAtk(atk: number): void {
  *
  * @param value   Proposed target value.
  * @param maxMult Maximum multiplier of _currentPlayerAtk (default 4 = 4-hit combo).
+ *                A charged shot (3× ATK) can reliably solve targets up to 3×,
+ *                so the minimum of 0.25× ATK means even a weak hit is never
+ *                too small to trigger a digit-ending or modulo objective.
  */
 function clampToReachable(value: number, maxMult = 4): number {
+  // Min = 25 % of ATK ensures objectives are achievable with careful aiming.
   const max = Math.ceil(_currentPlayerAtk * maxMult);
   const min = Math.max(1, Math.floor(_currentPlayerAtk * 0.25));
   return Math.min(max, Math.max(min, value));

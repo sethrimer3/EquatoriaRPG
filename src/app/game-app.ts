@@ -55,6 +55,24 @@ import type { AppState, UIPanels } from './app-types';
 import { handleAction as handleActionImpl } from './app-actions';
 import { createGameLoop } from './app-game-loop';
 
+// ─── Utilities ───────────────────────────────────────────────────
+
+/**
+ * Returns the list of worlds that are now unlocked (not 'locked') but were
+ * locked before the given level was completed.
+ *
+ * @param prevUnlocked Set of WorldIds that were already unlocked before the completion.
+ * @param state        The updated WorldMapProgressionState after marking the level complete.
+ */
+function detectNewlyUnlockedWorlds(
+  prevUnlocked: ReadonlySet<WorldId>,
+  state: WorldMapProgressionState,
+): WorldId[] {
+  return WORLD_MAP_DATA
+    .filter(w => !prevUnlocked.has(w.id) && getWorldUnlockState(state, w.id) !== 'locked')
+    .map(w => w.id);
+}
+
 // ─── Bootstrap ──────────────────────────────────────────────────
 
 export async function startApp(): Promise<void> {
@@ -198,17 +216,8 @@ export async function startApp(): Promise<void> {
         `[Campaign] Level complete — world="${activeLevelWorldId}" level="${activeLevelId}". Progression saved.`,
       );
 
-      // Determine which worlds were newly unlocked by this completion.
-      const newlyUnlocked: WorldId[] = WORLD_MAP_DATA
-        .filter(w =>
-          !prevUnlocked.has(w.id) &&
-          getWorldUnlockState(worldMapProgressionState, w.id) !== 'locked',
-        )
-        .map(w => w.id);
-
-      // If new worlds opened up, queue a pulse animation on those nodes for
-      // when the player returns to the map.
-      for (const wId of newlyUnlocked) {
+      // Queue a pulse animation for any worlds newly unlocked by this completion.
+      for (const wId of detectNewlyUnlockedWorlds(prevUnlocked, worldMapProgressionState)) {
         worldMapScreen.scheduleNewWorldHighlight(wId);
       }
 

@@ -1033,6 +1033,39 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
     }
   }
 
+  /**
+   * Tick the charge-attack mechanic each frame.
+   *
+   * While `keys.charge` is held the chargeMs counter grows (capped at CHARGE_MAX_MS).
+   * On release with >= CHARGE_MIN_MS built, fires a boosted shot on all equipped weapons
+   * with ATK scaled by the charge fraction (up to CHARGE_MAX_MULT × normal ATK).
+   * Insufficient charge is discarded; chargeMs is reset in all release branches.
+   */
+  function updateChargeAttack(deltaMs: number): void {
+    if (rpgPhase === 'alive' && keys.charge) {
+      chargeMs = Math.min(chargeMs + deltaMs, CHARGE_MAX_MS);
+      return;
+    }
+    if (chargeMs >= CHARGE_MIN_MS) {
+      // Key just released with enough charge — fire a boosted shot.
+      const chargeFrac = Math.min(1, chargeMs / CHARGE_MAX_MS);
+      const chargeMult = 1 + (CHARGE_MAX_MULT - 1) * chargeFrac;
+      const prevAtk = playerStats.atk;
+      playerStats.atk *= chargeMult;
+      for (const weaponId of getEffectiveEquippedIds()) {
+        statsPanel.withDamageSource(weaponId, () => performWeaponAttack(weaponId));
+      }
+      if (getEffectiveEquippedIds().size === 0) {
+        statsPanel.withDamageSource(BASE_ATTACK_TIMER_KEY, () => performWeaponAttack(BASE_ATTACK_TIMER_KEY));
+      }
+      playerStats.atk = prevAtk;
+      removeDeadEnemies();
+      checkWaveCompletion();
+    }
+    // Reset whether charge fired or was abandoned.
+    chargeMs = 0;
+  }
+
   function doRestart(): void {
     playerStats.hp = playerStats.maxHp;
     enemies.length = 0; spawnQueue.length = 0;
@@ -1524,32 +1557,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
       updateLuckyMotePopups(luckyMotePopups, deltaMs);
 
       // ── Charge attack tick ────────────────────────────────────────
-      // Space / KeyF held → build charge; release → fire a charged shot
-      // that multiplies player ATK by up to CHARGE_MAX_MULT.
-      if (rpgPhase === 'alive' && keys.charge) {
-        chargeMs = Math.min(chargeMs + deltaMs, CHARGE_MAX_MS);
-      } else if (chargeMs >= CHARGE_MIN_MS) {
-        // Key just released with enough charge built up — fire a boosted shot.
-        const chargeFrac = Math.min(1, chargeMs / CHARGE_MAX_MS);
-        const chargeMult = 1 + (CHARGE_MAX_MULT - 1) * chargeFrac;
-        const prevAtk = playerStats.atk;
-        playerStats.atk *= chargeMult;
-        // Fire on all equipped weapons (same as a normal auto-attack tick).
-        for (const weaponId of getEffectiveEquippedIds()) {
-          statsPanel.withDamageSource(weaponId, () => performWeaponAttack(weaponId));
-        }
-        // If no weapons equipped, use the base sand attack.
-        if (getEffectiveEquippedIds().size === 0) {
-          statsPanel.withDamageSource(BASE_ATTACK_TIMER_KEY, () => performWeaponAttack(BASE_ATTACK_TIMER_KEY));
-        }
-        playerStats.atk = prevAtk;
-        removeDeadEnemies();
-        checkWaveCompletion();
-        chargeMs = 0;
-      } else if (!keys.charge) {
-        // Released with insufficient charge — reset.
-        chargeMs = 0;
-      }
+      updateChargeAttack(deltaMs);
 
       // Apply HP regen: regenerate regen% of maxHp per second when alive.
       if (rpgPhase === 'alive' && playerStats.hp > 0 && playerStats.hp < playerStats.maxHp) {

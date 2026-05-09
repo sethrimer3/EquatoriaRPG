@@ -100,7 +100,6 @@ export function drawTutorialBanner(
     return;
   }
 
-  const t = _activeTutorial.remainingMs / TUTORIAL_BANNER_DURATION_MS;
   let alpha: number;
   if (_activeTutorial.remainingMs < TUTORIAL_BANNER_FADE_MS) {
     alpha = _activeTutorial.remainingMs / TUTORIAL_BANNER_FADE_MS;
@@ -109,7 +108,6 @@ export function drawTutorialBanner(
   } else {
     alpha = 1;
   }
-  void t;
 
   const cx = canvasWidth / 2;
   const cy = Math.round(canvasHeight * 0.16);
