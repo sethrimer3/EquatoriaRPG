@@ -69,6 +69,9 @@ export function setCurrentPlayerAtk(atk: number): void {
  *                too small to trigger a digit-ending or modulo objective.
  */
 function clampToReachable(value: number, maxMult = 4): number {
+  // Max multiplier of 4 is chosen to be slightly above the charge-attack ceiling
+  // (3× ATK).  With a full charge plus a normal hit, the player can deal up to
+  // 3× ATK — so a 4× target is always reachable within two shots.
   // Min = 25 % of ATK ensures objectives are achievable with careful aiming.
   const max = Math.ceil(_currentPlayerAtk * maxMult);
   const min = Math.max(1, Math.floor(_currentPlayerAtk * 0.25));

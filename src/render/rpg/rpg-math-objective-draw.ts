@@ -40,7 +40,13 @@ const TUTORIAL_SEEN_STORAGE_KEY = 'equatoria_seen_objectives';
 const _seenObjectiveKinds: Set<string> = (() => {
   try {
     const raw = localStorage.getItem(TUTORIAL_SEEN_STORAGE_KEY);
-    if (raw) return new Set<string>(JSON.parse(raw) as string[]);
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw);
+      // Validate shape before trusting user-controlled storage.
+      if (Array.isArray(parsed) && parsed.every(x => typeof x === 'string')) {
+        return new Set<string>(parsed as string[]);
+      }
+    }
   } catch {
     // Ignore parse errors — start fresh.
   }

@@ -288,6 +288,9 @@ export async function startApp(): Promise<void> {
     // made during the RPG session are reflected immediately.
     worldMapScreen.refresh(worldMapProgressionState);
     worldMapScreen.show();
+    // Update the history state so the browser back button returns to the map
+    // (not the RPG arena) without a page reload.
+    history.replaceState({ screen: 'worldmap' }, '', location.href);
   }
 
   function goToMainMenu(): void {
@@ -298,6 +301,21 @@ export async function startApp(): Promise<void> {
     saveWorldMapProgression(worldMapProgressionState);
     window.location.reload();
   }
+
+  // ── Back-button / swipe-back navigation ──────────────────────────
+  // When the RPG level starts we push a { screen: 'arena' } history entry on
+  // top of whatever was already there.  When the user presses the system back
+  // gesture, the browser pops the 'arena' entry and fires popstate with the
+  // underlying state (which is { screen: 'worldmap' }).  We intercept that and
+  // call showWorldMap() instead of letting the browser navigate away.
+  window.addEventListener('popstate', (e: PopStateEvent) => {
+    const screen = (e.state as { screen?: string } | null)?.screen;
+    if (screen === 'worldmap') {
+      // User pressed back while in the arena — return to world map.
+      showWorldMap();
+    }
+    // Other states (e.g. no state / pre-app entries) are left to browser default.
+  });
 
   // Wire the Return-to-Map CTA button (showWorldMap must be defined first).
   returnToMapBtn.addEventListener('click', () => { showWorldMap(); });
@@ -389,6 +407,9 @@ export async function startApp(): Promise<void> {
       rpgRender.setWaveEnemyBias(levelDef.waveEnemyBias ?? {});
       // Start the game loop
       gameLoop.start();
+      // Push an 'arena' history entry so the system back gesture navigates
+      // to the world map instead of leaving the app.
+      history.pushState({ screen: 'arena' }, '', location.href);
       // Confirm active level context (set by registerLevelLauncher above, but
       // levelDef.levelId is the canonical source in the onPlay path).
       activeLevelId = levelDef.levelId ?? activeLevelId;

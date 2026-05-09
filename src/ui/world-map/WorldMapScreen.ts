@@ -636,13 +636,13 @@ export function createWorldMapScreen(
         _fpsLowMs += dtMs;
         _fpsHighMs = 0;
         if (_fpsLowMs >= FPS_REDUCE_WINDOW_MS && particleQuality === 'full') {
-          // Auto-reduce to 'reduced'
-          applyParticleQuality('reduced');
+          // Auto-reduce to 'reduced'; pass fromAutoDetect=true to trigger persistence.
+          applyParticleQuality('reduced', true);
           _fpsLowMs = 0;
           console.info('[WorldMap] Auto-reduced particle quality to "reduced" (FPS < 30)');
         } else if (_fpsLowMs >= FPS_REDUCE_WINDOW_MS && particleQuality === 'reduced') {
-          // Reduce further to 'low'
-          applyParticleQuality('low');
+          // Reduce further to 'low'; pass fromAutoDetect=true to trigger persistence.
+          applyParticleQuality('low', true);
           _fpsLowMs = 0;
           console.info('[WorldMap] Auto-reduced particle quality to "low" (FPS < 30)');
         }
@@ -652,7 +652,8 @@ export function createWorldMapScreen(
           _fpsHighMs += dtMs;
           if (_fpsHighMs >= FPS_RESTORE_WINDOW_MS) {
             const next = particleQuality === 'low' ? 'reduced' as const : 'full' as const;
-            applyParticleQuality(next);
+            // Restore quality; pass fromAutoDetect=true to trigger persistence.
+            applyParticleQuality(next, true);
             _fpsHighMs = 0;
             console.info(`[WorldMap] Auto-restored particle quality to "${next}" (FPS > 50)`);
           }
@@ -673,8 +674,14 @@ export function createWorldMapScreen(
     animRafId = requestAnimationFrame(animFrame);
   }
 
-  /** Internal helper: apply a quality level without the idempotency guard. */
-  function applyParticleQuality(quality: ParticleQuality): void {
+  /**
+   * Internal helper: apply a quality level and optionally notify the host.
+   * @param quality The new particle quality level.
+   * @param fromAutoDetect When true, fires `onAutoQualityChange` so the host can
+   *   persist the new level.  When false (user-initiated via setParticleQuality),
+   *   the host already knows about the change, so the callback is suppressed.
+   */
+  function applyParticleQuality(quality: ParticleQuality, fromAutoDetect = false): void {
     particleQuality = quality;
     particleSys = createWorldMapParticles(quality);
     if (isVisible) {
@@ -684,8 +691,9 @@ export function createWorldMapScreen(
       particleSys.resize(cxCSS, cyCSS, maxR);
       particleSys.setActive(true);
     }
-    // Notify the host so it can persist the new quality level.
-    onAutoQualityChange?.(quality);
+    // Notify the host only when the change came from FPS auto-detection, so
+    // user-initiated calls to setParticleQuality() don't create a redundant save.
+    if (fromAutoDetect) onAutoQualityChange?.(quality);
   }
 
   function startAnimLoop(): void {

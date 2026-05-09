@@ -121,7 +121,11 @@ function def(
   waveCount?: number,
   waveEnemyBias?: Readonly<Partial<Record<string, number>>>,
 ): LevelDefinition {
-  // If no explicit bias is given, fall back to the world-level default.
+  // If no explicit bias is provided, fall back to the world-level default.
+  // Boss levels and optional challenge levels inherit the same world bias unless
+  // overridden via the explicit 11th argument — this is intentional: even boss
+  // fights should feel thematically consistent with their world's enemy roster.
+  // Pass an empty object `{}` explicitly to opt out of any bias on a per-level basis.
   const bias = waveEnemyBias ?? WORLD_BIAS[worldId];
   return { id: `layout_${levelId}`, worldId, levelId, name, type, archetype, description, objective, room, placeholderMechanics, waveCount, waveEnemyBias: bias };
 }

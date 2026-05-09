@@ -1090,16 +1090,20 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
       const chargeFrac = Math.min(1, chargeMs / CHARGE_MAX_MS);
       const chargeMult = 1 + (CHARGE_MAX_MULT - 1) * chargeFrac;
       const prevAtk = playerStats.atk;
-      playerStats.atk *= chargeMult;
-      for (const weaponId of getEffectiveEquippedIds()) {
-        statsPanel.withDamageSource(weaponId, () => performWeaponAttack(weaponId));
+      // Use try-finally to guarantee ATK is restored even if an error is thrown.
+      try {
+        playerStats.atk *= chargeMult;
+        for (const weaponId of getEffectiveEquippedIds()) {
+          statsPanel.withDamageSource(weaponId, () => performWeaponAttack(weaponId));
+        }
+        if (getEffectiveEquippedIds().size === 0) {
+          statsPanel.withDamageSource(BASE_ATTACK_TIMER_KEY, () => performWeaponAttack(BASE_ATTACK_TIMER_KEY));
+        }
+        removeDeadEnemies();
+        checkWaveCompletion();
+      } finally {
+        playerStats.atk = prevAtk;
       }
-      if (getEffectiveEquippedIds().size === 0) {
-        statsPanel.withDamageSource(BASE_ATTACK_TIMER_KEY, () => performWeaponAttack(BASE_ATTACK_TIMER_KEY));
-      }
-      playerStats.atk = prevAtk;
-      removeDeadEnemies();
-      checkWaveCompletion();
     }
     // Reset whether charge fired or was abandoned.
     chargeMs = 0;
