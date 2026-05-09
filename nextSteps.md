@@ -2,84 +2,58 @@
 
 ---
 
-## Implemented (previous sessions + this session)
+## Implemented (across recent sessions)
 
-### `waveCount` in `LevelDefinition`
-- Added `readonly waveCount?: number` to `LevelDefinition` type.
-- All 11 boss levels (level 10 of each world) get `waveCount: 5`.
-- `game-app.ts` `onPlay` uses `levelDef.waveCount ?? (levelDef.type === 'boss' ? 5 : 3)`.
+### Core gameplay / campaign features
+- `waveCount` in `LevelDefinition` — boss levels = 5 waves; used in `game-app.ts onPlay`
+- Per-world wave enemy bias — 11 `BIAS_*` constants; `WaveManagerCtx.getWaveEnemyBias()` injects into `startNextWave()`; `setWaveEnemyBias()` on `RpgRender`
+- Charge attack — Space/F hold → up to 3× ATK; arc ring + "CHARGED!" text; `updateChargeAttack()` helper with try-finally ATK safety
+- Mobile charge button — `#mobile-charge-btn` touch-only; synthetic KeyF events
+- Charge SFX — `onChargeReady()` + `onChargeRelease()` in `AudioSystem`
+- Level intro banner — `setLevelName()` on `RpgRender`; 3 s fade-in/out at level start
+- Solvability guard — `clampToReachable()` + `setCurrentPlayerAtk()` in `rpg-math-objective-factory.ts`
+- Tutorial banners — first-encounter explanations; persistent via `equatoria_seen_objectives` localStorage
+- Level completion CTA — "🗺 Return to Map" pulsing DOM overlay button
 
-### "🗺 Return to Map" post-completion CTA overlay button
-- `.lvl-complete-overlay` DOM element with a pulsing gold button.
-- Shown after `onLevelComplete` fires; hidden on `showWorldMap()` or new level start.
+### World map UX
+- Hover tooltip with right-edge clamping
+- Level progress dots (colour-coded; boss dot larger)
+- Completed-world gold ring + ✓ checkmark
+- World-unlock pulse animation — `scheduleNewWorldHighlight()` + `detectNewlyUnlockedWorlds()`
+- FPS auto-detection — step-down at < 30 FPS, step-up at > 50 FPS; persisted to `SettingsState`
 
-### World-unlock pulse animation on world-map nodes
-- `scheduleNewWorldHighlight(worldId)` queues a 4 s gold pulsing ring + "NEW!" label animation.
-- `detectNewlyUnlockedWorlds(prevUnlocked, state)` helper in `game-app.ts`.
+### Settings
+- "💡 Reset Tutorial Hints" button — clears `equatoria_seen_objectives` localStorage
+- FPS auto-quality persistence — `onAutoQualityChange` callback writes back to settings
 
-### Hover tooltip on world-map canvas nodes
-- `.wm-node-tooltip` DOM element shows world name, chapter, and unlock state.
-- Right-edge clamping prevents overflow beyond the canvas.
+### LevelScreen
+- Enemy badge — top 4 promoted enemy types as colour abbreviation tags
+- Wave count label — "⚔ N Waves" / "👑 N Boss Waves"
 
-### FPS auto-detection in world-map anim loop
-- Rolling FPS tracked each frame; auto-reduces/restores particle quality.
+### Navigation
+- Back-button / swipe: History API `pushState({ screen: 'arena' })`; `popstate` returns to world map
 
-### Tutorial banners for first-encounter math objectives
-- First encounter of each objective kind → 4 s gold pill banner explaining the mechanic.
-- **Persistent across sessions**: `_seenObjectiveKinds` is stored in `localStorage` under `equatoria_seen_objectives`.
-- `resetObjectiveTutorials()` only clears the active banner, not the seen set.
-
-### Solvability guard for math objectives
-- `setCurrentPlayerAtk(atk)` / `clampToReachable(value, maxMult)` in `rpg-math-objective-factory.ts`.
-- `applyEquipmentStats()` keeps the factory in sync.
-
-### Level progress dots on world-map nodes
-- Small dots below world name showing completed/current/future mandatory levels.
-
-### Charge attack mechanic
-- Space/F hold builds `chargeMs` (0→1500ms max); release fires boosted shot (up to 3× ATK).
-- `updateChargeAttack(deltaMs)` helper in `rpg-render.ts`.
-- Visual: expanding arc ring + "CHARGED!" text at full charge.
-- Canvas hint `[Space/F] Charge shot` shown in first 3 waves.
-
-### Mobile charge button
-- `#mobile-charge-btn` fixed-position DOM button (bottom-right, z=68).
-- Visible only on coarse-pointer (touch) devices via `@media (pointer: fine)` hide.
-- Fires synthetic `KeyF` keydown/keyup events so the same charge-attack path handles both mobile and desktop.
-- Shown when arena starts; hidden on `showWorldMap()`.
-
----
-
-## Files changed (this session)
-- `src/types/levelTypes.ts` — `waveCount?`
-- `src/data/worldLevelPlans.ts` — boss levels `waveCount: 5`
-- `src/app/game-app.ts` — mobile charge button; `detectNewlyUnlockedWorlds` helper; waveCount usage; overlay wiring
-- `src/ui/world-map/WorldMapScreen.ts` — scheduleNewWorldHighlight, FPS auto-quality, hover tooltip (w/ clamping), level progress dots
-- `src/render/rpg/rpg-math-objective-draw.ts` — tutorial banner system (persistent localStorage)
-- `src/render/rpg/rpg-math-objective-factory.ts` — solvability guard
-- `src/render/rpg/rpg-render.ts` — charge attack, tutorial banner draw, `updateChargeAttack` helper
-- `src/render/rpg/rpg-input.ts` — Space/KeyF charge key
-- `src/render/rpg/rpg-types.ts` — `RpgKeyState.charge`
-- `src/styles/canvas.css` — `.lvl-complete-overlay`, `#mobile-charge-btn`
-- `src/styles/world-map.css` — `.wm-node-tooltip`
+### Documentation
+- `ARCHITECTURE.md` — world map particle/UX system, enemy bias, charge attack, level completion flow, navigation diagram
+- `manual_test_checklist.md` — 30+ new checks for all new features
 - `file_index.md` — updated entries
 
 ---
 
 ## What still needs work
 
-1. **Campaign wave tuning per level**: Currently all campaign levels share the same wave-definition data from `wave-definitions.ts`. Level-specific tuning (weaker enemies for early levels, specific enemy mixes per world theme) would make each level feel unique.
+1. **Campaign wave tuning per level**: All campaign levels share wave definitions from `wave-definitions.ts`. Level-specific tuning (enemy HP scaling, spawn rate) would differentiate early and late levels. Approach: add `waveScaleFactor?: number` to `LevelDefinition` passed through to `startNextWave()`.
 
-2. **World-map level granularity (sub-nodes)**: Individual tappable level sub-nodes arranged around each world node. Each could show level number + type and open the LevelScreen directly.
+2. **World-map sub-nodes / level dots clickable**: Currently the world node opens a detail panel. Individual level dots could be tappable to jump directly to the LevelScreen for that level.
 
-3. **Auto-particle quality persistence**: FPS auto-reduction changes quality at runtime but doesn't write back to `SettingsState`. A persistent "reduced" setting would survive reloads on low-end devices.
+3. **Per-enemy-kind solvability guard**: Diamond/eigenstein/fracteryl enemies have unique attack patterns. Clamping their `mathObjective` targets independently (not just via generic `clampToReachable`) would improve difficulty fairness.
 
-4. **Per-enemy-kind solvability guard**: The diamond/eigenstein biases use `getWaveStatScale` scaling (already wave-appropriate). The `clampToReachable` guard only applies to the generic bucket. Per-kind targets could also be hardened.
+4. **Base 6 LevelDefinitions**: Most Base 6 challenge IDs are not yet in `WORLD_LEVEL_PLANS`. Add definitions or a fallback that creates a generic layout from challenge metadata.
 
-5. **Back-button / swipe gesture**: Android/iOS system back gesture currently reloads the page. An in-app back handler would let players navigate RPG → World Map without a reload.
+5. **Offline / background progress**: No progress accumulates while closed. Even a simple "away for X min → Y motes" screen would improve retention.
 
-6. **Base 6 LevelDefinitions**: Most Base 6 challenge IDs are not yet in `WORLD_LEVEL_PLANS`. Either add definitions, or add a fallback that creates a generic Base 6 level layout from the challenge metadata.
+6. **Boss-completion grade in world map detail panel**: `bossCompletions: Map<number, number>` lives in `RpgSimState`. Exposing best-time grades (S/A/B/C) in the world map detail panel would reward skilled play. Requires passing `RpgSimState` into `DetailPanelCtx`.
 
-7. **Offline/background progress**: The game currently accumulates no progress while closed. Even a simple "you were away for X minutes, here's Y motes" screen would improve retention.
+7. **World-specific music**: Background ambiance currently only distinguishes "equation" tab. Worlds could have distinct music themes started by `goToWorldMusic(worldId)`.
 
-8. **Sound effects for charge attack**: The charge build-up and release currently have no audio feedback.
+8. **Accessibility audit**: Keyboard-only navigation through world map and RPG menus; ARIA roles for canvas overlays; color-blind mode for tier dots.
