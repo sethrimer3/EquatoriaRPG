@@ -354,16 +354,35 @@ export function createWorldMapScreen(
       radGrad.addColorStop(1, darken(color, 0.2));
       ctx.fillStyle = radGrad;
       ctx.fill();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.5;
+      // Completed worlds get a gold stroke; others use the world colour.
+      if (s === 'completed') {
+        ctx.strokeStyle = '#ffe066';
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = '#ffe066';
+        ctx.shadowBlur = 6;
+      } else {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 0;
+      }
       ctx.stroke();
+      ctx.shadowBlur = 0;
 
-      // Chapter number in node
-      ctx.fillStyle = s === 'locked' ? '#5a5a6a' : '#0a0a12';
+      // Chapter number in node (for non-completed worlds) or checkmark (for completed)
       ctx.font = `bold ${Math.round(node.radius * 0.75)}px 'Poiret One', sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(String(worldData.chapter), node.cx, node.cy);
+      if (s === 'completed') {
+        // Draw a subtle checkmark with glow to signal world fully beaten.
+        ctx.fillStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 6;
+        ctx.fillText('✓', node.cx, node.cy);
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.fillStyle = s === 'locked' ? '#5a5a6a' : '#0a0a12';
+        ctx.fillText(String(worldData.chapter), node.cx, node.cy);
+      }
 
       // World name below node
       ctx.fillStyle = s === 'locked' ? '#4a4a5a' : color;
