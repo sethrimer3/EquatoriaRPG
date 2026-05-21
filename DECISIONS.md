@@ -344,3 +344,13 @@ Hit detection (`swordHitInArc`) always checks the same `arcStart→arcEnd` windo
 **UI**: The stats bar now has a `rpg-player-stats-box` container grouping HP/ATK/DEF with a draggable `rpg-xp-node` label at its top. The player drags from the XP node to ATK or DEF to connect. An SVG overlay with a Verlet-integrated rope (12 nodes, gravity=0.35, damping=0.97) visualises the cable with soft-body physics each frame. Once locked the wire renders in the target stat's colour and the stat value pulses with a CSS glow animation. Under each stat two sub-text lines show the base value (without any XP contribution) and the cumulative XP that has flowed to that stat.
 
 **Save format**: Bumped to v17. All three new fields are optional in the schema and default to `null`/`0` on older saves.
+
+## Local Electron Shell
+
+**Decision**: Add a minimal Electron shell in `electron/main.cjs` that loads the built Vite output from `dist/index.html`. The Electron window keeps `contextIsolation: true` and `nodeIntegration: false`, and no preload script is used because the game does not need renderer access to Node APIs.
+
+**Desktop build path**: `npm run build:desktop` runs Vite with mode `desktop`, which sets `base: './'` so built scripts, CSS, fonts, images, audio, and copied assets resolve correctly under `file://`. The normal `npm run build` path keeps existing browser/GitHub Pages behavior, deriving the hosted base path in GitHub Actions from `GITHUB_REPOSITORY`.
+
+**Asset copy**: The old shell-specific `postbuild` command was replaced with `scripts/copy-assets.cjs` so Windows batch launchers and GitHub Actions both copy the required `ASSETS/` subfolders into `dist/ASSETS`.
+
+**Save behavior**: The game continues using browser `localStorage`. Electron uses its own app-profile localStorage, so desktop saves are separate from browser dev-server saves. No save migration or filesystem save layer was added.

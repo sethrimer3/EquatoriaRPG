@@ -24,6 +24,23 @@ npm run build    # Production build to dist/
 npm run typecheck # TypeScript type checking
 ```
 
+## Windows Launchers
+
+The easiest local desktop entry point is `run-desktop.bat`. Double-click it from Windows Explorer to install dependencies if needed, build the desktop-friendly `dist/`, and launch the game in Electron.
+
+- `run-desktop.bat` builds and runs the Electron desktop version.
+- `run-browser-dev.bat` starts the normal Vite browser dev server at `http://localhost:3000`.
+- `build-game.bat` runs the normal production build for static hosting/GitHub Pages.
+
+Manual Electron commands:
+
+```bash
+npm run build:desktop
+npm run electron
+```
+
+See [ELECTRON.md](./ELECTRON.md) for troubleshooting, save-profile notes, and asset-loading checks.
+
 ## Project Structure
 
 ```

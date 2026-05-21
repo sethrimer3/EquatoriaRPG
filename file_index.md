@@ -2,6 +2,13 @@
 
 ## Root
 
+- `electron/main.cjs` - Minimal Electron main process. Creates the desktop window with `contextIsolation: true`, `nodeIntegration: false`, and loads `dist/index.html`.
+- `scripts/copy-assets.cjs` - Cross-platform post-build asset copy helper. Copies `ASSETS/SPRITES`, `ASSETS/ANIMATIONS`, `ASSETS/font`, `ASSETS/music`, and `ASSETS/sfx` into `dist/ASSETS`.
+- `run-desktop.bat` - Windows double-click launcher for dependency install, desktop build, and Electron launch.
+- `run-browser-dev.bat` - Windows double-click launcher for dependency install and the Vite dev server.
+- `build-game.bat` - Windows double-click launcher for dependency install and production build.
+- `ELECTRON.md` - Local Electron setup, launcher usage, save-profile notes, and troubleshooting.
+
 - `index.html` — Entry point HTML, loads styles and main.ts
 - `vite.config.ts` — Vite build configuration
 - `tsconfig.json` — TypeScript compiler configuration
