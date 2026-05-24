@@ -6,7 +6,7 @@ In Achievements, there are three sound effects: one for when the player earns a 
 
 In menu navigation, the four sound effects have self-explanatory names. Error should be played whenever the player presses on anything they cannot afford, things that aren't unlocked yet, etc...
 
-When a mote is merged, a random sound effect from the motesMerging folder should be played, with a maximum of 2 playing simultaneously.
+Mote merge sound effects are currently disabled because the previous motesMerging assets were intentionally removed.
 
 When the player changes any setting (including sliding the sound effects volume bar to a different setting, but NOT when the player moves the music volume bar to a different setting), a random sound effect should be played from the settingsChange folder.
 

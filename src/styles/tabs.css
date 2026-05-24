@@ -12,7 +12,7 @@
   height: calc(var(--tab-height) + var(--safe-bottom));
   padding-bottom: var(--safe-bottom);
   background: rgba(12, 12, 20, 0.95);
-  border-top: 1px solid rgba(255, 241, 114, 0.15);
+  border-top: 2px solid var(--accent);
   z-index: 10;
 }
 
@@ -29,8 +29,9 @@
   font-size: 10px;
   cursor: pointer;
   padding: 4px 8px;
-  border-radius: var(--border-radius);
-  transition: color 0.15s, background 0.15s;
+  border-radius: 0;
+  box-shadow: inset 0 0 0 2px var(--accent);
+  transition: color 0.15s, background 0.15s, box-shadow 0.15s;
   min-height: 44px;
   position: relative;
   overflow: hidden;
@@ -57,16 +58,14 @@
 
 /* Static tabs: three layered images */
 .tab-icon-img--normal   { opacity: 1; }
-.tab-icon-img--hover    { opacity: 0; }
-.tab-icon-img--selected { opacity: 0; }
+.tab-icon-img--hover,
+.tab-icon-img--selected { display: none; }
 
 /* Hover state — show hover image, hide normal */
-.tab-btn:not(.active):hover .tab-icon-img--normal { opacity: 0; }
-.tab-btn:not(.active):hover .tab-icon-img--hover  { opacity: 1; }
+.tab-btn:not(.active):hover .tab-icon-img--normal { opacity: 1; }
 
 /* Active/selected state — show selected image, hide normal */
-.tab-btn.active .tab-icon-img--normal   { opacity: 0; }
-.tab-btn.active .tab-icon-img--selected { opacity: 1; }
+.tab-btn.active .tab-icon-img--normal { opacity: 1; }
 
 /* Animated tab (upgrades): single image driven by JS, always visible */
 .tab-icon-img--animated {
@@ -81,6 +80,7 @@
 .tab-btn.active {
   color: var(--accent);
   background: rgba(255, 241, 114, 0.08);
+  box-shadow: inset 0 0 0 4px var(--accent);
 }
 
 .tab-btn:active {
