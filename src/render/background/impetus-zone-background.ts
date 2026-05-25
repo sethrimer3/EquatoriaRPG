@@ -353,6 +353,7 @@ interface ImpetusGravitySource {
   x: number;
   y: number;
   radiusPx: number;
+  /** 0-255 blend color channel values. */
   r: number;
   g: number;
   b: number;
@@ -638,6 +639,8 @@ export interface ImpetusZoneBackground {
 export function createImpetusZoneBackground(): ImpetusZoneBackground {
   const starfieldRenderer = new StarfieldRenderer();
   const gravityGridRenderer = new ImpetusGravityGridRenderer();
+  let cachedWidthPx = 0;
+  let cachedHeightPx = 0;
 
   return {
     draw(
@@ -652,25 +655,35 @@ export function createImpetusZoneBackground(): ImpetusZoneBackground {
       graphicsQuality,
       nowMs,
     ): void {
-      void nowMs;
-      const gradient = ctx.createLinearGradient(0, 0, 0, heightPx);
+      const renderWidthPx = widthPx || cachedWidthPx;
+      const renderHeightPx = heightPx || cachedHeightPx;
+      const starDrift = Math.min(28, Math.max(6, Math.min(renderWidthPx, renderHeightPx) * 0.02));
+      const parallaxCamera = {
+        x: cameraX + Math.sin(nowMs * 0.00008) * starDrift,
+        y: cameraY + Math.cos(nowMs * 0.00006) * starDrift,
+      };
+
+      cachedWidthPx = renderWidthPx;
+      cachedHeightPx = renderHeightPx;
+
+      const gradient = ctx.createLinearGradient(0, 0, 0, renderHeightPx);
       gradient.addColorStop(0, 'rgba(4,6,18,1)');
       gradient.addColorStop(1, 'rgba(8,4,22,1)');
       ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, widthPx, heightPx);
+      ctx.fillRect(0, 0, renderWidthPx, renderHeightPx);
 
       starfieldRenderer.drawReworkedParallaxStars(
         ctx,
-        { x: cameraX, y: cameraY },
-        widthPx,
-        heightPx,
+        parallaxCamera,
+        renderWidthPx,
+        renderHeightPx,
         graphicsQuality,
       );
 
       gravityGridRenderer.drawImpetusGravityGrid(gravitySources, {
         ctx,
-        widthPx,
-        heightPx,
+        widthPx: renderWidthPx,
+        heightPx: renderHeightPx,
         camera: { x: cameraX, y: cameraY },
         zoom,
         worldToScreen,
@@ -678,8 +691,8 @@ export function createImpetusZoneBackground(): ImpetusZoneBackground {
       });
     },
     resize(widthPx: number, heightPx: number): void {
-      void widthPx;
-      void heightPx;
+      cachedWidthPx = widthPx;
+      cachedHeightPx = heightPx;
     },
   };
 }

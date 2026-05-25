@@ -309,6 +309,8 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
   // ── Euler fluid background ─────────────────────────────────────
   const fluid = createRpgFluid();
   const impetusBackground = createImpetusZoneBackground();
+  const PLAYER_IMPETUS_SOURCE = { radiusPx: 16, r: 100, g: 200, b: 255 } as const;
+  const ENEMY_IMPETUS_SOURCE = { radiusPx: 12, r: 200, g: 150, b: 80 } as const;
 
   function doResize(cont: HTMLElement): void {
     const w = cont.clientWidth  || INTERNAL_WIDTH;
@@ -1218,23 +1220,23 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
     // Fluid background — rendered first so all gameplay elements appear above it.
     fluid.render(ctx);
 
-    // Impetus zone background — always on for now (can gate on zone type later)
+    // Impetus zone background pass.
     {
       const gravitySources: ImpetusGravitySource[] = [];
-      gravitySources.push({ x: mote.x, y: mote.y, radiusPx: 16, r: 100, g: 200, b: 255 });
+      gravitySources.push({ x: mote.x, y: mote.y, ...PLAYER_IMPETUS_SOURCE });
       for (const e of [
         ...enemies, ...sapphireEnemies, ...emeraldEnemies, ...amberEnemies,
         ...voidEnemies, ...quartzEnemies, ...rubyEnemies, ...sunstoneEnemies,
       ]) {
-        gravitySources.push({ x: e.x, y: e.y, radiusPx: 12, r: 200, g: 150, b: 80 });
+        gravitySources.push({ x: e.x, y: e.y, ...ENEMY_IMPETUS_SOURCE });
       }
 
-      const identityToScreen = (w: { x: number; y: number }): { x: number; y: number } => w;
+      const identityWorldToScreen = (world: { x: number; y: number }): { x: number; y: number } => world;
       impetusBackground.draw(
         ctx, widthPx, heightPx,
         0, 0,
         1,
-        identityToScreen,
+        identityWorldToScreen,
         gravitySources,
         isLowGraphicsMode ? 'low' : 'high',
         nowMs,
