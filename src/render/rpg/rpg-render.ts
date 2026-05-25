@@ -38,6 +38,7 @@ import { TIER_BY_ID } from '../../data/tiers';
 import type { TierId } from '../../data/tiers';
 import type { NumberFormat } from '../../util/format';
 import { createRpgFluid } from './rpg-fluid';
+import { createImpetusZoneBackground, type ImpetusGravitySource } from '../background';
 import { createDamageFns } from './rpg-damage';
 import { createRpgStatsPanel, type RpgStatsPanelHandle } from './rpg-stats-panel';
 import {
@@ -307,6 +308,9 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
 
   // ── Euler fluid background ─────────────────────────────────────
   const fluid = createRpgFluid();
+  const impetusBackground = createImpetusZoneBackground();
+  const PLAYER_IMPETUS_SOURCE = { radiusPx: 16, r: 100, g: 200, b: 255 } as const;
+  const ENEMY_IMPETUS_SOURCE = { radiusPx: 12, r: 200, g: 150, b: 80 } as const;
 
   function doResize(cont: HTMLElement): void {
     const w = cont.clientWidth  || INTERNAL_WIDTH;
@@ -323,6 +327,7 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
     canvas.width  = widthPx;
     canvas.height = heightPx;
     fluid.resize(widthPx, heightPx);
+    impetusBackground.resize(widthPx, heightPx);
   }
   doResize(container);
 
@@ -1214,6 +1219,29 @@ export function createRpgRender(container: HTMLElement, rpgSimState: RpgSimState
 
     // Fluid background — rendered first so all gameplay elements appear above it.
     fluid.render(ctx);
+
+    // Impetus zone background pass.
+    {
+      const gravitySources: ImpetusGravitySource[] = [];
+      gravitySources.push({ x: mote.x, y: mote.y, ...PLAYER_IMPETUS_SOURCE });
+      for (const e of [
+        ...enemies, ...sapphireEnemies, ...emeraldEnemies, ...amberEnemies,
+        ...voidEnemies, ...quartzEnemies, ...rubyEnemies, ...sunstoneEnemies,
+      ]) {
+        gravitySources.push({ x: e.x, y: e.y, ...ENEMY_IMPETUS_SOURCE });
+      }
+
+      const identityWorldToScreen = (world: { x: number; y: number }): { x: number; y: number } => world;
+      impetusBackground.draw(
+        ctx, widthPx, heightPx,
+        0, 0,
+        1,
+        identityWorldToScreen,
+        gravitySources,
+        isLowGraphicsMode ? 'low' : 'high',
+        nowMs,
+      );
+    }
 
     drawLaserEnemies(ctx, enemies, nowMs);
     drawMathObjectivesForArray(ctx, enemies, LASER_ENEMY_SIZE / 2, _currentDeltaMs);

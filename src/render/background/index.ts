@@ -4,3 +4,5 @@ export { createVermiculateEffect } from './vermiculate-effect';
 export type { VermiculateEffect } from './vermiculate-effect';
 export { createSubstrateEffect } from './substrate-effect';
 export type { SubstrateEffect } from './substrate-effect';
+export { createImpetusZoneBackground } from './impetus-zone-background';
+export type { ImpetusZoneBackground, ImpetusGravitySource } from './impetus-zone-background';
