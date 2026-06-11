@@ -247,7 +247,6 @@ export function createSettingsPanel(
   credits.className = 'credits';
   credits.innerHTML = `
     <p>Equatoria RPG v0.1.0</p>
-    <p>A math-themed particle-physics RPG</p>
   `;
   panel.appendChild(credits);
 

@@ -187,6 +187,7 @@
 
 ### src/sim/resources/resource-state.ts
 - Authoritative mote totals per tier and lifetime totals.
+- `isMoteTierUnlocked()` — Sand is available from the start; later tiers unlock when first earned.
 - `addMotes()`, `spendMotes()`, `getMotes()`, `getTotalMotes()`.
 - `getEquivalence()` — product of all non-zero per-tier mote totals (player's "Equivalence" score).
 - `totalToSizeCounts(total)` — converts a float total to a `Map<SizeIndex, number>` in base-100 (Grain, Shard, Chunk, Mass, …). Used at save time and for display.
@@ -911,6 +912,7 @@
 
 ### src/ui/panels/aliven-pane.ts
 - "Aliven" sub-tab content: per-tier aliven rows + interactive NxN interaction-matrix grid.
+- Hides Aliven rows for mote tiers the player has not unlocked yet.
 - Aliven rows show unlock button (cost 10,000 own motes) or ✦ Alive badge.
 - Interaction matrix cells support tap (apply selected ±0.05 step) and drag (continuous adjustment).
 - Matrix is rebuilt only when the alivened tier set changes (keyed by join string).

@@ -13,7 +13,8 @@ import { quantizeMathDamage, formatMathCompact } from './math-objective-types';
 
 export { quantizeMathDamage, formatMathCompact };
 
-export const MATH_FEEDBACK_DURATION_MS = 1400;
+/** Enemy feedback text lifetime: three times the 900 ms damage-number lifetime. */
+export const MATH_FEEDBACK_DURATION_MS = 2700;
 export const MATH_PULSE_DURATION_MS = 300;
 /** Duration in ms for the expanding gold ring "SOLVED!" burst animation. */
 export const MATH_SOLVED_FLASH_MS = 700;

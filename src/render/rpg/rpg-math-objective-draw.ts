@@ -23,9 +23,18 @@ const RING_THICK = 1.5;               // progress ring stroke width (canvas unit
 const RING_OFFSET_Y = 8;              // px above enemy centre to ring centre
 const LABEL_FONT = '5px monospace';
 const EQUATION_SNAKE_FONT = '5px monospace'; // same size but rendered in gold accent
-const FEEDBACK_FONT = '6px monospace';
-const FEEDBACK_OFFSET_Y = -12;        // px above ring centre
+const FEEDBACK_FONT = 'bold 6px monospace';
+const FEEDBACK_SPEED = 1.8;
+const FEEDBACK_DECEL = 0.88;
 const LABEL_CACHE_SIZE = 64;          // maximum entries in the text-width LRU cache
+
+interface FloatingFeedbackState {
+  feedback: MathObjective['feedback'];
+  x: number; y: number;
+  vx: number; vy: number;
+}
+
+const _floatingFeedbackByObjective = new WeakMap<MathObjective, FloatingFeedbackState>();
 
 // ── Tutorial banner ────────────────────────────────────────────
 
@@ -205,6 +214,27 @@ export function drawMathObjective(
   radius: number,
   deltaMs: number,
 ): void {
+  const feedback = obj.feedback;
+  if (feedback) {
+    let floating = _floatingFeedbackByObjective.get(obj);
+    if (!floating || floating.feedback !== feedback) {
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * (Math.PI / 2);
+      floating = {
+        feedback,
+        x: ex, y: ey,
+        vx: Math.cos(angle) * FEEDBACK_SPEED,
+        vy: Math.sin(angle) * FEEDBACK_SPEED,
+      };
+      _floatingFeedbackByObjective.set(obj, floating);
+    }
+    const dt = Math.min(deltaMs / 16.667, 3);
+    const decelFactor = Math.pow(FEEDBACK_DECEL, dt);
+    floating.x += floating.vx * dt;
+    floating.y += floating.vy * dt;
+    floating.vx *= decelFactor;
+    floating.vy *= decelFactor;
+  }
+
   tickObjectiveFeedback(obj, deltaMs);
 
   // Register the objective kind for tutorial-banner purposes.
@@ -251,19 +281,24 @@ export function drawMathObjective(
   ctx.fillText(label, ex, ringCy);
 
   // ── Feedback flash ─────────────────────────────────────────
-  if (obj.feedback && obj.feedback.timerMs > 0) {
-    // Fade out over the last 80 ms; full brightness for the rest of the duration.
-    const alpha = Math.min(1, obj.feedback.timerMs / 80);
-    ctx.font = FEEDBACK_FONT;
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = obj.feedback.kind === 'accepted' ? '#4f8' : '#f44';
-    // Show the actual feedback text (e.g. "needs ≥15", "too high (=25)", "Σ 45/200")
-    // so players know exactly what the objective requires.
-    ctx.fillText(obj.feedback.text, ex, ringCy + FEEDBACK_OFFSET_Y);
-    ctx.globalAlpha = 1;
-  }
-
   ctx.restore();
+
+  const floating = _floatingFeedbackByObjective.get(obj);
+  if (feedback && floating?.feedback === feedback) {
+    const alpha = Math.min(1, feedback.timerMs / (feedback.maxTimerMs / 3));
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = FEEDBACK_FONT;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#000';
+    ctx.fillStyle = obj.accentColor;
+    ctx.strokeText(feedback.text, Math.round(floating.x), Math.round(floating.y));
+    ctx.fillText(feedback.text, Math.round(floating.x), Math.round(floating.y));
+    ctx.restore();
+  }
 
   // ── SOLVED burst animation ─────────────────────────────────
   if (obj.solvedFlashMs !== undefined && obj.solvedFlashMs > 0) {

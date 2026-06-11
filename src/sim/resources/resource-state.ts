@@ -35,6 +35,11 @@ export function getLifetimeMotes(state: ResourceState, tierId: TierId): number {
   return state.lifetimeMotes.get(tierId) ?? 0;
 }
 
+/** Sand is available from the start; later mote tiers unlock when first earned. */
+export function isMoteTierUnlocked(state: ResourceState, tierId: TierId): boolean {
+  return tierId === 'sand' || getLifetimeMotes(state, tierId) > 0;
+}
+
 /** Total motes across all tiers (sum). Used as basic "score". */
 export function getTotalMotes(state: ResourceState): number {
   let total = 0;

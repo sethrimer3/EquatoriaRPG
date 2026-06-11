@@ -21,6 +21,7 @@ import {
   ALIVEN_COST,
   MATRIX_EDIT_STEP,
 } from '../../sim/aliven';
+import { isMoteTierUnlocked } from '../../sim/resources';
 import { formatNumberAs } from '../../util';
 import { makePageBreak } from '../ui-helpers';
 
@@ -376,7 +377,7 @@ export function createAlivenPane(dispatch: ActionHandler): AlivenPane {
       const btn = alivenButtons.get(tier.id);
       if (!row || !btn) continue;
 
-      row.style.display = '';
+      row.style.display = isMoteTierUnlocked(state.resources, tier.id) ? '' : 'none';
 
       const alive = isAlivened(state.aliven, tier.id);
       const affordable = canAffordAliven(state.resources, tier.id);
